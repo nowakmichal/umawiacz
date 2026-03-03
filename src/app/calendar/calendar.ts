@@ -1,0 +1,334 @@
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  OnInit,
+  PLATFORM_ID,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { isPlatformBrowser, CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { interval, startWith, switchMap } from 'rxjs';
+import { SELECTION_COLORS, SelectionColor, TimePeriod } from '../models/time-period.model';
+import { PeriodService } from '../services/period.service';
+
+interface DayMarking {
+  periodId: string;
+  userName: string;
+  color: string; // hex
+  colorLabel: string;
+}
+
+interface CalendarDay {
+  date: Date;
+  inCurrentMonth: boolean;
+  isToday: boolean;
+  markings: DayMarking[];
+  isSelecting: boolean;
+}
+
+const POLL_INTERVAL_MS = 15_000;
+const USERNAME_KEY = 'umawiacz_username';
+
+@Component({
+  selector: 'app-calendar',
+  imports: [CommonModule],
+  templateUrl: './calendar.html',
+  styleUrl: './calendar.scss',
+})
+export class Calendar implements OnInit {
+  private readonly today = new Date();
+  private readonly periodService = inject(PeriodService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly elementRef = inject(ElementRef);
+
+  // Flag to swallow the click event that fires after a touchstart on a marked day
+  private pendingClickSwallow = false;
+
+  readonly selectionColors = SELECTION_COLORS;
+
+  readonly viewDate = signal(new Date(this.today.getFullYear(), this.today.getMonth(), 1));
+  readonly selectedColor = signal<SelectionColor>('green');
+  readonly isErasing = signal(false);
+  readonly selectionStart = signal<Date | null>(null);
+  readonly hoverDate = signal<Date | null>(null);
+  readonly periods = signal<TimePeriod[]>([]);
+  readonly isSaving = signal(false);
+
+  readonly currentUser = signal<string | null>(null);
+  readonly usernameInput = signal('');
+  readonly errorMessage = signal<string | null>(null);
+
+  readonly tooltipDay = signal<CalendarDay | null>(null);
+  readonly tooltipPos = signal<{ x: number; y: number }>({ x: 0, y: 0 });
+  readonly tooltipAbove = signal(true);
+
+  readonly monthLabel = computed(() =>
+    this.viewDate().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' }),
+  );
+
+  readonly weeks = computed<CalendarDay[][]>(() => {
+    const view = this.viewDate();
+    const year = view.getFullYear();
+    const month = view.getMonth();
+
+    const firstDay = new Date(year, month, 1);
+    const startOffset = (firstDay.getDay() + 6) % 7;
+    const gridStart = new Date(firstDay);
+    gridStart.setDate(gridStart.getDate() - startOffset);
+
+    const activePeriods = this.periods();
+    const start = this.selectionStart();
+    const hover = this.hoverDate();
+
+    const colorMap = new Map(SELECTION_COLORS.map((c) => [c.value, c.hex]));
+    const labelMap = new Map(SELECTION_COLORS.map((c) => [c.value, c.label]));
+
+    const days: CalendarDay[] = [];
+    const cursor = new Date(gridStart);
+
+    for (let i = 0; i < 42; i++) {
+      const date = new Date(cursor);
+      const dateStr = toIsoDate(date);
+
+      const matchingPeriods = activePeriods.filter(
+        (p) => p.start <= dateStr && dateStr <= p.end,
+      );
+      const markings: DayMarking[] = matchingPeriods.map((p) => ({
+        periodId: p.id,
+        userName: p.userName,
+        color: colorMap.get(p.color) ?? '#000',
+        colorLabel: labelMap.get(p.color) ?? p.color,
+      }));
+
+      let isSelecting = false;
+      if (start) {
+        const rangeEnd = hover ?? start;
+        const lo = start <= rangeEnd ? start : rangeEnd;
+        const hi = start <= rangeEnd ? rangeEnd : start;
+        isSelecting = lo <= date && date <= hi;
+      }
+
+      days.push({
+        date,
+        inCurrentMonth: date.getMonth() === month,
+        isToday: this.isSameDay(date, this.today),
+        markings,
+        isSelecting,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return Array.from({ length: 6 }, (_, i) => days.slice(i * 7, i * 7 + 7));
+  });
+
+  readonly weekDays = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
+
+  ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+
+    const saved = localStorage.getItem(USERNAME_KEY);
+    if (saved) this.currentUser.set(saved);
+
+    interval(POLL_INTERVAL_MS)
+      .pipe(
+        startWith(0),
+        switchMap(() => this.periodService.getPeriods()),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (periods) => this.periods.set(periods),
+        error: () => {},
+      });
+  }
+
+  confirmUsername(): void {
+    const name = this.usernameInput().trim();
+    if (!name) return;
+    localStorage.setItem(USERNAME_KEY, name);
+    this.currentUser.set(name);
+  }
+
+  prevMonth(): void {
+    const d = this.viewDate();
+    this.viewDate.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  }
+
+  nextMonth(): void {
+    const d = this.viewDate();
+    this.viewDate.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  }
+
+  goToToday(): void {
+    this.viewDate.set(new Date(this.today.getFullYear(), this.today.getMonth(), 1));
+  }
+
+  selectColor(color: SelectionColor): void {
+    this.selectedColor.set(color);
+    this.isErasing.set(false);
+  }
+
+  toggleEraseMode(): void {
+    const next = !this.isErasing();
+    this.isErasing.set(next);
+    if (next) {
+      this.selectionStart.set(null);
+      this.hoverDate.set(null);
+    }
+  }
+
+  onDayMouseEnter(day: CalendarDay, event: MouseEvent): void {
+    if (this.selectionStart()) {
+      this.hoverDate.set(day.date);
+      return;
+    }
+    if (day.markings.length && !this.isErasing()) {
+      this.positionTooltip(day, event.currentTarget as HTMLElement);
+    }
+  }
+
+  onDayMouseLeave(): void {
+    this.hoverDate.set(null);
+    this.tooltipDay.set(null);
+  }
+
+  /**
+   * On touch devices, touchstart fires before click.
+   * We use a flag to swallow the subsequent click when showing/hiding the tooltip,
+   * so that the selection flow doesn't start unintentionally.
+   */
+  onDayTouchStart(day: CalendarDay, event: TouchEvent): void {
+    if (this.isErasing() || this.selectionStart()) return;
+
+    if (this.tooltipDay()) {
+      // Dismiss tooltip; swallow the click so we don't start a selection
+      this.tooltipDay.set(null);
+      this.pendingClickSwallow = true;
+      return;
+    }
+
+    if (day.markings.length) {
+      this.positionTooltip(day, event.currentTarget as HTMLElement);
+      this.pendingClickSwallow = true;
+    }
+  }
+
+  onDayClick(day: CalendarDay): void {
+    if (this.pendingClickSwallow) {
+      this.pendingClickSwallow = false;
+      return;
+    }
+
+    this.tooltipDay.set(null);
+
+    if (this.isErasing()) {
+      const user = this.currentUser();
+      const ownMarking = day.markings.find((m) => m.userName === user);
+      if (ownMarking) this.removeMarking(ownMarking.periodId);
+      return;
+    }
+
+    const start = this.selectionStart();
+    if (!start) {
+      this.selectionStart.set(day.date);
+      return;
+    }
+
+    const user = this.currentUser();
+    if (!user) return;
+
+    const lo = start <= day.date ? start : day.date;
+    const hi = start <= day.date ? day.date : start;
+    const startStr = toIsoDate(lo);
+    const endStr = toIsoDate(hi);
+    const color = this.selectedColor();
+
+    this.isSaving.set(true);
+    this.errorMessage.set(null);
+    this.periodService.createPeriod({ start: startStr, end: endStr, color, userName: user }).subscribe({
+      next: (resp) => {
+        this.periods.update((list) => [
+          ...list,
+          { id: resp.id, start: resp.start, end: resp.end, color: resp.color, userName: resp.userName },
+        ]);
+        this.selectionStart.set(null);
+        this.hoverDate.set(null);
+        this.isSaving.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        if (err.status === 409) {
+          // Server rejected: user already has a marking in this range
+          this.errorMessage.set('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
+        } else {
+          // Network/server unavailable — store locally as fallback
+          this.periods.update((list) => [
+            ...list,
+            { id: crypto.randomUUID(), start: startStr, end: endStr, color, userName: user },
+          ]);
+        }
+        this.selectionStart.set(null);
+        this.hoverDate.set(null);
+        this.isSaving.set(false);
+      },
+    });
+  }
+
+  cancelSelection(): void {
+    this.selectionStart.set(null);
+    this.hoverDate.set(null);
+  }
+
+  dismissError(): void {
+    this.errorMessage.set(null);
+  }
+
+  isSelectionStart(day: CalendarDay): boolean {
+    const start = this.selectionStart();
+    return start !== null && this.isSameDay(start, day.date);
+  }
+
+  private positionTooltip(day: CalendarDay, el: HTMLElement): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    const cellRect = el.getBoundingClientRect();
+    const shellRect = (this.elementRef.nativeElement as HTMLElement).getBoundingClientRect();
+    const x = cellRect.left - shellRect.left + cellRect.width / 2;
+    const above = cellRect.top > window.innerHeight * 0.55;
+    const y = above ? cellRect.top - shellRect.top : cellRect.bottom - shellRect.top;
+    this.tooltipAbove.set(above);
+    this.tooltipPos.set({ x, y });
+    this.tooltipDay.set(day);
+  }
+
+  private removeMarking(id: string): void {
+    this.isSaving.set(true);
+    this.periodService.deletePeriod(id).subscribe({
+      next: () => {
+        this.periods.update((list) => list.filter((p) => p.id !== id));
+        this.isSaving.set(false);
+      },
+      error: () => {
+        this.periods.update((list) => list.filter((p) => p.id !== id));
+        this.isSaving.set(false);
+      },
+    });
+  }
+
+  private isSameDay(a: Date, b: Date): boolean {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+}
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}

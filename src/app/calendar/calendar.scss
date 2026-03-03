@@ -1,0 +1,513 @@
+/* ── Username modal ── */
+.user-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.user-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.modal-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.modal-input {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s;
+
+  &:focus {
+    border-color: #2563eb;
+  }
+}
+
+.modal-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover:not([disabled]) {
+    background: #1d4ed8;
+  }
+
+  &[disabled] {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+/* ── Shell ── */
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f8f9fa;
+}
+
+.calendar-shell {
+  position: relative; /* tooltip anchors here */
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* ── Header ── */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 8px;
+}
+
+.nav-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #e5e7eb;
+  }
+}
+
+.header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.month-label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #111827;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.today-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 2px 12px;
+  font-size: 0.8rem;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #e5e7eb;
+  }
+}
+
+.user-chip {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 20px;
+  padding: 2px 10px;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Color toolbar ── */
+.color-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 16px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, transform 0.1s;
+  flex-shrink: 0;
+
+  &.active {
+    border-color: #111827;
+    transform: scale(1.15);
+  }
+
+  &:hover:not(.active) {
+    border-color: #6b7280;
+  }
+}
+
+.erase-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  background: #f3f4f6;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, transform 0.1s;
+  flex-shrink: 0;
+
+  &.active {
+    border-color: #111827;
+    transform: scale(1.15);
+    background: #e5e7eb;
+  }
+
+  &:hover:not(.active) {
+    border-color: #6b7280;
+  }
+}
+
+.toolbar-hint {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.cancel-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #e5e7eb;
+  }
+}
+
+/* ── Error banner ── */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+  color: #991b1b;
+}
+
+.error-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #991b1b;
+  font-size: 0.85rem;
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+
+  &:hover {
+    opacity: 0.7;
+  }
+}
+
+/* ── Grid ── */
+.cal-grid {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.weekday-cell {
+  text-align: center;
+  padding: 10px 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.week-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid #e5e7eb;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.day-cell {
+  min-height: 72px;
+  padding: 6px 4px 4px;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover {
+    background: #f9fafb;
+  }
+
+  &.other-month .day-number {
+    color: #d1d5db;
+  }
+
+  &.today .day-number {
+    background: #2563eb;
+    color: #ffffff;
+    border-radius: 50%;
+  }
+
+  &.selecting {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  &.selection-start {
+    background: rgba(0, 0, 0, 0.09);
+  }
+}
+
+.day-number {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #111827;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── Color bands (one per user who marked this day) ── */
+.markings-row {
+  display: flex;
+  gap: 2px;
+  width: calc(100% - 4px);
+  margin-top: auto;
+  padding-bottom: 3px;
+}
+
+.period-band {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  min-width: 4px;
+}
+
+/* ── Tooltip ── */
+.day-tooltip {
+  position: absolute;
+  z-index: 200;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 150px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+
+  &.tooltip-above {
+    transform: translate(-50%, calc(-100% - 8px));
+  }
+
+  &.tooltip-below {
+    transform: translate(-50%, 8px);
+  }
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid #f3f4f6;
+  }
+}
+
+.tooltip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tooltip-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #111827;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tooltip-color-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* ── Responsive — tablet ── */
+@media (max-width: 600px) {
+  .calendar-shell {
+    padding: 12px 8px;
+  }
+
+  .month-label {
+    font-size: 1rem;
+  }
+
+  .nav-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    font-size: 1.2rem;
+  }
+
+  .weekday-cell {
+    font-size: 0.7rem;
+    padding: 7px 0;
+  }
+
+  .day-cell {
+    min-height: 48px;
+    padding: 4px 2px 3px;
+  }
+
+  .day-number {
+    font-size: 0.78rem;
+    width: 24px;
+    height: 24px;
+  }
+
+  .markings-row {
+    width: calc(100% - 2px);
+    padding-bottom: 2px;
+    gap: 1px;
+  }
+
+  .period-band {
+    height: 3px;
+  }
+
+  .color-toolbar {
+    gap: 6px;
+    padding-bottom: 12px;
+  }
+
+  .color-swatch,
+  .erase-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .toolbar-hint {
+    font-size: 0.72rem;
+  }
+}
+
+/* ── Responsive — very small phones ── */
+@media (max-width: 380px) {
+  .day-cell {
+    min-height: 40px;
+    padding: 3px 1px;
+  }
+
+  .day-number {
+    font-size: 0.72rem;
+    width: 20px;
+    height: 20px;
+  }
+
+  .weekday-cell {
+    font-size: 0.62rem;
+    letter-spacing: 0;
+    padding: 6px 0;
+  }
+}

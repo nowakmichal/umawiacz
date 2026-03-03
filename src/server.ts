@@ -5,6 +5,7 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
+import { request as httpRequest } from 'node:http';
 import { join } from 'node:path';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -13,16 +14,29 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 /**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
- *
- * Example:
- * ```ts
- * app.get('/api/{*splat}', (req, res) => {
- *   // Handle API request
- * });
- * ```
+ * Proxy /api/* to the C# backend.
+ * In development the Angular dev-server proxy (proxy.conf.json) handles this;
+ * here we cover the built/SSR mode. Set API_URL env var to override.
  */
+const apiTarget = new URL(process.env['API_URL'] ?? 'http://localhost:5000');
+
+app.use('/api', (req, res) => {
+  const proxy = httpRequest(
+    {
+      hostname: apiTarget.hostname,
+      port: apiTarget.port ? Number(apiTarget.port) : 80,
+      path: req.originalUrl,
+      method: req.method,
+      headers: { ...req.headers, host: apiTarget.host },
+    },
+    (apiRes) => {
+      res.writeHead(apiRes.statusCode ?? 502, apiRes.headers as Record<string, string | string[]>);
+      apiRes.pipe(res);
+    },
+  );
+  proxy.on('error', () => res.status(502).json({ error: 'Backend unavailable' }));
+  req.pipe(proxy);
+});
 
 /**
  * Serve static files from /browser

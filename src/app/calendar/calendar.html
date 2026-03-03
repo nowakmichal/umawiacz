@@ -1,0 +1,124 @@
+@if (!currentUser()) {
+  <div class="user-modal-overlay">
+    <div class="user-modal">
+      <p class="modal-title">Witaj w Umawiacz</p>
+      <p class="modal-subtitle">Podaj swoje imię, aby kontynuować</p>
+      <input
+        class="modal-input"
+        type="text"
+        placeholder="Twoje imię"
+        [value]="usernameInput()"
+        (input)="usernameInput.set($any($event.target).value)"
+        (keydown.enter)="confirmUsername()"
+        autofocus
+      />
+      <button class="modal-btn" [disabled]="!usernameInput().trim()" (click)="confirmUsername()">
+        Dalej
+      </button>
+    </div>
+  </div>
+}
+
+<div class="calendar-shell">
+  <header class="cal-header">
+    <button class="nav-btn" (click)="prevMonth()" aria-label="Poprzedni miesiąc">&#8249;</button>
+    <div class="header-center">
+      <span class="month-label">{{ monthLabel() }}</span>
+      <div class="header-meta">
+        <button class="today-btn" (click)="goToToday()">Dziś</button>
+        @if (currentUser()) {
+          <span class="user-chip">{{ currentUser() }}</span>
+        }
+      </div>
+    </div>
+    <button class="nav-btn" (click)="nextMonth()" aria-label="Następny miesiąc">&#8250;</button>
+  </header>
+
+  <div class="color-toolbar">
+    @for (c of selectionColors; track c.value) {
+      <button
+        class="color-swatch"
+        [class.active]="!isErasing() && selectedColor() === c.value"
+        [style.background]="c.hex"
+        (click)="selectColor(c.value)"
+        [attr.aria-label]="c.label"
+      ></button>
+    }
+    <button
+      class="erase-btn"
+      [class.active]="isErasing()"
+      (click)="toggleEraseMode()"
+      aria-label="Usuń oznaczenie"
+    >
+      ✕
+    </button>
+    @if (selectionStart()) {
+      <span class="toolbar-hint">Wybierz datę końcową</span>
+      <button class="cancel-btn" (click)="cancelSelection()">Anuluj</button>
+    }
+    @if (isErasing()) {
+      <span class="toolbar-hint">Kliknij swój dzień, aby usunąć</span>
+    }
+  </div>
+
+  @if (errorMessage()) {
+    <div class="error-banner" role="alert">
+      <span>{{ errorMessage() }}</span>
+      <button class="error-close" (click)="dismissError()" aria-label="Zamknij">✕</button>
+    </div>
+  }
+
+  <div class="cal-grid">
+    <div class="weekday-row">
+      @for (day of weekDays; track day) {
+        <div class="weekday-cell">{{ day }}</div>
+      }
+    </div>
+
+    @for (week of weeks(); track $index) {
+      <div class="week-row">
+        @for (day of week; track day.date.toISOString()) {
+          <div
+            class="day-cell"
+            [class.other-month]="!day.inCurrentMonth"
+            [class.today]="day.isToday"
+            [class.selecting]="day.isSelecting"
+            [class.selection-start]="isSelectionStart(day)"
+            [class.has-markings]="day.markings.length > 0"
+            (click)="onDayClick(day)"
+            (mouseenter)="onDayMouseEnter(day, $event)"
+            (mouseleave)="onDayMouseLeave()"
+            (touchstart)="onDayTouchStart(day, $event)"
+          >
+            <span class="day-number">{{ day.date.getDate() }}</span>
+            @if (day.markings.length) {
+              <div class="markings-row">
+                @for (m of day.markings; track m.periodId) {
+                  <span class="period-band" [style.background]="m.color"></span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  @if (tooltipDay()) {
+    <div
+      class="day-tooltip"
+      [class.tooltip-above]="tooltipAbove()"
+      [class.tooltip-below]="!tooltipAbove()"
+      [style.left.px]="tooltipPos().x"
+      [style.top.px]="tooltipPos().y"
+    >
+      @for (m of tooltipDay()!.markings; track m.periodId) {
+        <div class="tooltip-row">
+          <span class="tooltip-dot" [style.background]="m.color"></span>
+          <span class="tooltip-name">{{ m.userName }}</span>
+          <span class="tooltip-color-label">{{ m.colorLabel }}</span>
+        </div>
+      }
+    </div>
+  }
+</div>

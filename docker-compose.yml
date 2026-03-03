@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:5000
+    # Port 5000 NIE jest wystawiony na zewnątrz – dostępny tylko wewnątrz sieci Docker.
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      API_URL: http://api:5000
+    depends_on:
+      - api
+    restart: unless-stopped
