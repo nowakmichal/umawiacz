@@ -83,4 +83,20 @@ app.MapDelete("/api/periods/{id}", async (string id, AppDbContext db) =>
     return Results.NoContent();
 });
 
+// ── POST /api/login ──────────────────────────────────────────────────────────
+app.MapPost("/api/login", async (LoginRequest request) =>
+{
+    // Simple hardcoded login for demo - in real app would check against database
+    if (request.Username == "test" && request.Password == "test")
+    {
+        return Results.Ok(new LoginResponse 
+        { 
+            Username = request.Username, 
+            Success = true 
+        });
+    }
+    
+    return Results.Unauthorized();
+});
+
 app.Run();

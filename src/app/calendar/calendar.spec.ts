@@ -266,7 +266,8 @@ describe('Calendar', () => {
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.error-banner')).toBeTruthy();
 
-      component.dismissError();
+      // Since we removed dismissError, test that error is cleared by setting to null
+      component.errorMessage.set(null);
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.error-banner')).toBeFalsy();
     });

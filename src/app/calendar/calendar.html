@@ -28,6 +28,7 @@
         <button class="today-btn" (click)="goToToday()">Dziś</button>
         @if (currentUser()) {
           <span class="user-chip">{{ currentUser() }}</span>
+          <button class="logout-btn" (click)="logout()" aria-label="Wyloguj">Wyloguj</button>
         }
       </div>
     </div>
@@ -64,7 +65,6 @@
   @if (errorMessage()) {
     <div class="error-banner" role="alert">
       <span>{{ errorMessage() }}</span>
-      <button class="error-close" (click)="dismissError()" aria-label="Zamknij">✕</button>
     </div>
   }
 

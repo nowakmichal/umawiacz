@@ -10,10 +10,12 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser, CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval, startWith, switchMap } from 'rxjs';
 import { SELECTION_COLORS, SelectionColor, TimePeriod } from '../models/time-period.model';
 import { PeriodService } from '../services/period.service';
+import { AuthService } from '../services/auth.service';
 
 interface DayMarking {
   periodId: string;
@@ -42,6 +44,8 @@ const USERNAME_KEY = 'umawiacz_username';
 export class Calendar implements OnInit {
   private readonly today = new Date();
   private readonly periodService = inject(PeriodService);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly elementRef = inject(ElementRef);
@@ -131,8 +135,15 @@ export class Calendar implements OnInit {
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
 
-    const saved = localStorage.getItem(USERNAME_KEY);
-    if (saved) this.currentUser.set(saved);
+    // Set the username from authentication
+    const user = this.authService.currentUser();
+    if (user) {
+      this.currentUser.set(user.username);
+    } else {
+      // If not authenticated, redirect to login
+      // Note: This would be handled by the route guard in practice
+      this.router.navigate(['/login']);
+    }
 
     interval(POLL_INTERVAL_MS)
       .pipe(
@@ -282,8 +293,9 @@ export class Calendar implements OnInit {
     this.hoverDate.set(null);
   }
 
-  dismissError(): void {
-    this.errorMessage.set(null);
+  logout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
   isSelectionStart(day: CalendarDay): boolean {
