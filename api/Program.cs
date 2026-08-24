@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Umawiacz.Api;
@@ -5,9 +6,16 @@ using Umawiacz.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── In-memory database ──────────────────────────────────────────────────────
-builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseInMemoryDatabase("UmawiaczDb"));
+// ── SQLite database (file under api/, see ConnectionStrings in appsettings.json) ──
+var connectionString = builder.Configuration.GetConnectionString("UmawiaczDb")
+    ?? throw new InvalidOperationException("Connection string 'UmawiaczDb' is missing.");
+
+var dataSource = new SqliteConnectionStringBuilder(connectionString).DataSource;
+var dbDirectory = Path.GetDirectoryName(Path.GetFullPath(dataSource));
+if (!string.IsNullOrEmpty(dbDirectory))
+    Directory.CreateDirectory(dbDirectory);
+
+builder.Services.AddDbContext<AppDbContext>(opt => opt.UseSqlite(connectionString));
 
 // ── JSON: camelCase to match the Angular frontend ───────────────────────────
 builder.Services.ConfigureHttpJsonOptions(opts =>
@@ -26,6 +34,13 @@ builder.Services.AddCors(opts =>
 
 var app = builder.Build();
 
+// ── Create the SQLite database on first run ─────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
+
 app.UseCors();
 
 // ── GET /api/periods ─────────────────────────────────────────────────────────
@@ -38,6 +53,8 @@ app.MapPost("/api/periods", async (CreateTimePeriodRequest req, AppDbContext db)
     if (string.IsNullOrWhiteSpace(req.UserName))
         return Results.BadRequest(new { error = "UserName is required." });
 
+    var userName = req.UserName.Trim().ToLowerInvariant();
+
     if (req.Color is not ("green" or "orange" or "red"))
         return Results.BadRequest(new { error = "Color must be 'green', 'orange', or 'red'." });
 
@@ -48,8 +65,9 @@ app.MapPost("/api/periods", async (CreateTimePeriodRequest req, AppDbContext db)
         return Results.BadRequest(new { error = "Start must not be after End." });
 
     // A user may not mark any day they have already marked
-    var overlap = await db.Periods.AnyAsync(p =>
-        p.UserName == req.UserName &&
+    // YYYY-MM-DD dates compare correctly with lexicographic order
+    var userPeriods = await db.Periods.Where(p => p.UserName == userName).ToListAsync();
+    var overlap = userPeriods.Any(p =>
         string.Compare(p.Start, req.End, StringComparison.Ordinal) <= 0 &&
         string.Compare(p.End, req.Start, StringComparison.Ordinal) >= 0);
 
@@ -62,7 +80,7 @@ app.MapPost("/api/periods", async (CreateTimePeriodRequest req, AppDbContext db)
         Start = req.Start,
         End = req.End,
         Color = req.Color,
-        UserName = req.UserName,
+        UserName = userName,
     };
 
     db.Periods.Add(period);
@@ -84,19 +102,17 @@ app.MapDelete("/api/periods/{id}", async (string id, AppDbContext db) =>
 });
 
 // ── POST /api/login ──────────────────────────────────────────────────────────
-app.MapPost("/api/login", async (LoginRequest request) =>
+app.MapPost("/api/login", (LoginRequest request) =>
 {
-    // Simple hardcoded login for demo - in real app would check against database
-    if (request.Username == "test" && request.Password == "test")
+    var username = request.Username?.Trim().ToLowerInvariant() ?? string.Empty;
+    if (username.Length == 0)
+        return Results.BadRequest(new { error = "Username is required." });
+
+    return Results.Ok(new LoginResponse
     {
-        return Results.Ok(new LoginResponse 
-        { 
-            Username = request.Username, 
-            Success = true 
-        });
-    }
-    
-    return Results.Unauthorized();
+        Username = username,
+        Success = true,
+    });
 });
 
 app.Run();

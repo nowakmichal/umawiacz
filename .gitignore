@@ -47,3 +47,7 @@ Thumbs.db
 api/bin/
 api/obj/
 *.user
+
+# SQLite database
+api/umawiacz.db*
+api/data/

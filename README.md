@@ -1,59 +1,89 @@
 # Umawiacz
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.1.2.
+A small calendar app for marking availability periods on a shared calendar.
+Angular 21 (SSR) frontend + C# ASP.NET Core backend. UI is in Polish (locale `pl-PL`).
 
-## Development server
+## Stack
 
-To start a local development server, run:
+| Layer     | Tech                                                    |
+|-----------|---------------------------------------------------------|
+| Frontend  | Angular 21, SSR (Express), standalone components, SCSS, Polish UI |
+| Backend   | C# ASP.NET Core `net10.0` minimal API, EF Core InMemory |
+| Testing   | Vitest (via `@angular/build:unit-test`)                 |
+| Deploy    | Docker / docker-compose (optional)                       |
 
-```bash
-ng serve
-```
+## Getting started
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Requires: Node.js 20+, .NET 10 SDK.
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+### 1. Install & run the backend
 
 ```bash
-ng generate --help
+cd api
+dotnet run          # API on http://localhost:5000
 ```
 
-## Building
-
-To build the project run:
+### 2. Run the frontend
 
 ```bash
-ng build
+npm install
+npm start           # Angular dev server on http://localhost:4200
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+The dev server proxies `/api/*` → `:5000` (see `proxy.conf.json`).
 
-## Running unit tests
+## API
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+Base: `http://localhost:5000`
+
+| Method | Path               | Body                                  | Notes                                  |
+|--------|--------------------|---------------------------------------|----------------------------------------|
+| GET    | `/api/periods`     | —                                     | list all periods                       |
+| POST   | `/api/periods`     | `{ start, end, color, userName }`     | 409 on range overlap for same user     |
+| DELETE | `/api/periods/{id}`| —                                     | 404 if missing                         |
+| POST   | `/api/login`       | `{ username, password }`              | hardcoded `test` / `test` (demo)       |
+
+`color` is one of `green | orange | red`; `start`/`end` are `YYYY-MM-DD`.
+
+## Scripts
 
 ```bash
-ng test
+npm start                     # dev server (:4200, proxies /api)
+npm test                      # all tests (Vitest)
+npm test -- --watch=false     # single run
+npx ng test --include="src/app/calendar/**/*.spec.ts"  # one spec file
+npm run build                 # SSR production build -> dist/
+npm run serve:ssr:umawiacz    # run built SSR server (port 4000 or $PORT)
+npm run watch                 # watch dev build
 ```
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
+## Production / Docker
 
 ```bash
-ng e2e
+npm run build                 # produce dist/ (browser + server)
+API_URL=http://api:5000 npm run serve:ssr:umawiacz
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Or run it all with docker-compose:
 
-## Additional Resources
+```bash
+docker compose up --build     # frontend on :4000, API internal on :5000
+```
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+The SSR server reads `API_URL` (default `http://localhost:5000`) for its `/api` proxy.
+
+## Project layout
+
+```
+api/                  C# minimal API (Program.cs, Models/, AppDbContext.cs)
+src/app/
+  calendar/           main shared-calendar component
+  home/               home component
+  login/              login form
+  guards/             auth guard
+  services/           HTTP services (period, auth, login)
+  models/             shared TS models
+  app.routes.ts       routes
+src/server.ts         Express SSR wrapper + /api proxy
+proxy.conf.json       dev-server /api -> :5000 proxy
+```

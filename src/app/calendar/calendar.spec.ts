@@ -63,12 +63,12 @@ describe('Calendar', () => {
     });
 
     it('should hide modal after calling confirmUsername', () => {
-      component.usernameInput.set('TestUser');
+      component.usernameInput.set('  TestUser ');
       component.confirmUsername();
       fixture.detectChanges();
 
-      expect(component.currentUser()).toBe('TestUser');
-      expect(localStorage.setItem).toHaveBeenCalledWith('umawiacz_username', 'TestUser');
+      expect(component.currentUser()).toBe('testuser');
+      expect(localStorage.setItem).toHaveBeenCalledWith('umawiacz_username', 'testuser');
       const modal = fixture.nativeElement.querySelector('.user-modal-overlay');
       expect(modal).toBeFalsy();
     });

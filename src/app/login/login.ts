@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { LoginService } from '../services/login.service';
 import { AuthService } from '../services/auth.service';
 import { LoginRequest, LoginResponse } from '../models/login.model';
@@ -13,7 +14,6 @@ import { LoginRequest, LoginResponse } from '../models/login.model';
 })
 export class LoginComponent {
   username = '';
-  password = '';
   errorMessage = signal<string | null>(null);
 
   constructor(
@@ -23,25 +23,29 @@ export class LoginComponent {
   ) {}
 
   onSubmit() {
-    const request: LoginRequest = {
-      username: this.username,
-      password: this.password
-    };
+    const username = this.username.trim().toLowerCase();
+    if (!username) {
+      this.errorMessage.set('Podaj nazwę użytkownika');
+      return;
+    }
+
+    const request: LoginRequest = { username };
 
     this.loginService.login(request).subscribe({
       next: (response: LoginResponse) => {
         if (response.success) {
-          // Store user in auth service
           this.authService.login(response);
-          
-          // Redirect to calendar page
           this.router.navigate(['/calendar']);
         } else {
-          this.errorMessage.set('Nieprawidłowa nazwa użytkownika lub hasło');
+          this.errorMessage.set('Nieprawidłowa nazwa użytkownika');
         }
       },
-      error: (error) => {
-        this.errorMessage.set('Błąd logowania. Spróbuj ponownie.');
+      error: (error: HttpErrorResponse) => {
+        if (error.status === 400) {
+          this.errorMessage.set('Podaj nazwę użytkownika');
+        } else {
+          this.errorMessage.set('Błąd logowania. Spróbuj ponownie.');
+        }
       }
     });
   }

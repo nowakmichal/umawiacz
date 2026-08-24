@@ -158,7 +158,7 @@ export class Calendar implements OnInit {
   }
 
   confirmUsername(): void {
-    const name = this.usernameInput().trim();
+    const name = this.usernameInput().trim().toLowerCase();
     if (!name) return;
     localStorage.setItem(USERNAME_KEY, name);
     this.currentUser.set(name);

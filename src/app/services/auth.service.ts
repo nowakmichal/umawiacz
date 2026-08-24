@@ -10,7 +10,7 @@ export class AuthService {
   }
 
   login(response: LoginResponse): void {
-    this._currentUser.set(response);
+    this._currentUser.set({ ...response, username: response.username.trim().toLowerCase() });
   }
 
   logout(): void {

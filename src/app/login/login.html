@@ -9,23 +9,15 @@
   
   <div class="form-group">
     <label for="username">Nazwa użytkownika:</label>
-    <input 
-      type="text" 
-      id="username" 
-      [(ngModel)]="username" 
+    <input
+      type="text"
+      id="username"
+      [(ngModel)]="username"
       class="form-control"
       placeholder="Wprowadź nazwę użytkownika">
   </div>
-  
-  <div class="form-group">
-    <label for="password">Hasło:</label>
-    <input 
-      type="password" 
-      id="password" 
-      [(ngModel)]="password" 
-      class="form-control"
-      placeholder="Wprowadź hasło">
-  </div>
-  
-  <button type="button" (click)="onSubmit()" class="btn btn-primary">Zaloguj</button>
+
+  <button type="button" [disabled]="!username.trim()" (click)="onSubmit()" class="btn btn-primary">
+    Zaloguj
+  </button>
 </div>
