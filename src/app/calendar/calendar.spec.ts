@@ -1,10 +1,24 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PLATFORM_ID } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { Calendar } from './calendar';
 import { PeriodService } from '../services/period.service';
+import { EventService } from '../services/event.service';
+import { AuthService } from '../services/auth.service';
 import { SELECTION_COLORS, TimePeriod } from '../models/time-period.model';
+import { EventInfo } from '../models/event.model';
 import { HttpErrorResponse } from '@angular/common/http';
+
+const EVENT_ID = 'test-event';
+
+const mockEvent: EventInfo = {
+  id: EVENT_ID,
+  name: 'Wakacje 2026',
+  startDate: '2026-06-01',
+  endDate: '2026-06-15',
+  description: 'Zaznaczcie dni, w których będziecie nieobecni',
+};
 
 function createPeriodServiceMock() {
   return {
@@ -16,14 +30,34 @@ function createPeriodServiceMock() {
 
 type MockPeriodService = ReturnType<typeof createPeriodServiceMock>;
 
+function createEventServiceMock() {
+  return {
+    getEventCalendar: vi.fn(),
+  };
+}
+
+type MockEventService = ReturnType<typeof createEventServiceMock>;
+
+function createAuthServiceMock() {
+  return {
+    currentUser: vi.fn().mockReturnValue(null),
+    logout: vi.fn(),
+  };
+}
+
+type MockAuthService = ReturnType<typeof createAuthServiceMock>;
+
 describe('Calendar', () => {
   let fixture: ComponentFixture<Calendar>;
   let component: Calendar;
   let periodService: MockPeriodService;
+  let eventService: MockEventService;
+  let authService: MockAuthService;
+  let router: Router;
 
   const mockPeriods: TimePeriod[] = [
-    { id: 'p1', start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Ala' },
-    { id: 'p2', start: '2026-06-10', end: '2026-06-12', color: 'orange', userName: 'Ola' },
+    { id: 'p1', eventId: EVENT_ID, start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Ala' },
+    { id: 'p2', eventId: EVENT_ID, start: '2026-06-10', end: '2026-06-12', color: 'orange', userName: 'Ola' },
   ];
 
   beforeEach(async () => {
@@ -34,13 +68,23 @@ describe('Calendar', () => {
     periodService = createPeriodServiceMock();
     periodService.getPeriods.mockReturnValue(of(mockPeriods));
 
+    eventService = createEventServiceMock();
+    eventService.getEventCalendar.mockReturnValue(of({ event: mockEvent, periods: [] }));
+
+    authService = createAuthServiceMock();
+
     await TestBed.configureTestingModule({
       imports: [Calendar],
       providers: [
         { provide: PeriodService, useValue: periodService },
+        { provide: EventService, useValue: eventService },
+        { provide: AuthService, useValue: authService },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['eventId', EVENT_ID]]) } } },
         { provide: PLATFORM_ID, useValue: 'browser' },
       ],
     }).compileComponents();
+
+    router = TestBed.inject(Router);
 
     fixture = TestBed.createComponent(Calendar);
     component = fixture.componentInstance;
@@ -52,8 +96,43 @@ describe('Calendar', () => {
   });
 
   it('should load periods on init', () => {
-    expect(periodService.getPeriods).toHaveBeenCalled();
-    expect(component.periods().length).toBe(2);
+    expect(periodService.getPeriods).toHaveBeenCalledWith(EVENT_ID);
+    expect(component.periods()).toEqual(mockPeriods);
+  });
+
+  describe('event loading', () => {
+    it('should load the event via getEventCalendar(eventId)', () => {
+      expect(eventService.getEventCalendar).toHaveBeenCalledWith(EVENT_ID);
+      expect(component.eventInfo()).toEqual(mockEvent);
+      expect(component.eventError()).toBeNull();
+    });
+
+    it('should render the error panel with the not-found message on 404', () => {
+      eventService.getEventCalendar.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 404 })),
+      );
+      const f = TestBed.createComponent(Calendar);
+      f.detectChanges();
+
+      const comp = f.componentInstance;
+      expect(comp.eventError()).toBe('Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.');
+      const el = f.nativeElement.querySelector('.event-error');
+      expect(el).toBeTruthy();
+      expect(el.textContent).toContain('Przejdź do wydarzeń');
+    });
+
+    it('should render the generic error message on other failures', () => {
+      eventService.getEventCalendar.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 500 })),
+      );
+      const f = TestBed.createComponent(Calendar);
+      f.detectChanges();
+
+      expect(f.componentInstance.eventError()).toBe(
+        'Nie udało się załadować kalendarza. Spróbuj ponownie.',
+      );
+      expect(f.nativeElement.querySelector('.event-error')).toBeTruthy();
+    });
   });
 
   describe('username modal', () => {
@@ -165,7 +244,7 @@ describe('Calendar', () => {
       component.onDayClick(day1);
       component.onDayClick(day2);
 
-      expect(periodService.createPeriod).toHaveBeenCalledWith({
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
         start: '2026-06-15',
         end: '2026-06-16',
         color: 'green',
@@ -199,6 +278,7 @@ describe('Calendar', () => {
       component.onDayClick(day2);
 
       expect(component.periods().length).toBe(3);
+      expect(component.periods()[2].eventId).toBe(EVENT_ID);
       expect(component.selectionStart()).toBeNull();
     });
 
@@ -243,6 +323,7 @@ describe('Calendar', () => {
 
   describe('tooltip', () => {
     it('should show tooltip on mouse enter over a marked day', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
       const day = component.weeks().flat().find((d) => d.markings.length > 0);
       if (!day) return;
 
@@ -266,10 +347,30 @@ describe('Calendar', () => {
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.error-banner')).toBeTruthy();
 
-      // Since we removed dismissError, test that error is cleared by setting to null
       component.errorMessage.set(null);
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.error-banner')).toBeFalsy();
+    });
+  });
+
+  describe('copyLink', () => {
+    it('should set the copied state', () => {
+      expect(component.copiedLink()).toBe(false);
+      component.copyLink();
+      expect(component.copiedLink()).toBe(true);
+    });
+  });
+
+  describe('logout', () => {
+    it('should clear currentUser and call authService.logout without navigation', () => {
+      component.currentUser.set('ala');
+      const navSpy = vi.spyOn(router, 'navigate');
+
+      component.logout();
+
+      expect(authService.logout).toHaveBeenCalled();
+      expect(component.currentUser()).toBeNull();
+      expect(navSpy).not.toHaveBeenCalled();
     });
   });
 

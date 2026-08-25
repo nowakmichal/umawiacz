@@ -53,7 +53,7 @@ describe('LoginComponent', () => {
     expect(loginService.login).toHaveBeenCalledWith({ username: 'test' });
   });
 
-  it('should log the user in and redirect to calendar on success', () => {
+  it('should log the user in and redirect to events on success', () => {
     component.username = 'ala';
     loginService.login.mockReturnValue(of({ username: 'ala', success: true }));
 
@@ -61,7 +61,7 @@ describe('LoginComponent', () => {
 
     expect(authService.isAuthenticated()).toBe(true);
     expect(authService.currentUser()?.username).toBe('ala');
-    expect(navigate).toHaveBeenCalledWith(['/calendar']);
+    expect(navigate).toHaveBeenCalledWith(['/events']);
   });
 
   it('should not submit an empty username', () => {

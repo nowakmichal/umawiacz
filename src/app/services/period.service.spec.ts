@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { PeriodService } from './period.service';
 import { CreateTimePeriodRequest, TimePeriod } from '../models/time-period.model';
@@ -7,6 +7,8 @@ import { CreateTimePeriodRequest, TimePeriod } from '../models/time-period.model
 describe('PeriodService', () => {
   let service: PeriodService;
   let http: HttpTestingController;
+
+  const EVENT_ID = 'ev-123';
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -25,23 +27,30 @@ describe('PeriodService', () => {
   });
 
   describe('getPeriods', () => {
-    it('should GET /api/periods', () => {
+    it('should GET /api/events/{eventId}/periods', () => {
       const expected: TimePeriod[] = [
-        { id: '1', start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Ala' },
+        {
+          id: '1',
+          eventId: EVENT_ID,
+          start: '2026-06-01',
+          end: '2026-06-05',
+          color: 'green',
+          userName: 'Ala',
+        },
       ];
 
-      service.getPeriods().subscribe((periods) => {
+      service.getPeriods(EVENT_ID).subscribe((periods) => {
         expect(periods).toEqual(expected);
       });
 
-      const req = http.expectOne('/api/periods');
+      const req = http.expectOne(`/api/events/${EVENT_ID}/periods`);
       expect(req.request.method).toBe('GET');
       req.flush(expected);
     });
   });
 
   describe('createPeriod', () => {
-    it('should POST /api/periods with the request body', () => {
+    it('should POST /api/events/{eventId}/periods with the request body', () => {
       const body: CreateTimePeriodRequest = {
         start: '2026-06-01',
         end: '2026-06-05',
@@ -50,11 +59,11 @@ describe('PeriodService', () => {
       };
       const response = { id: 'new-id', ...body };
 
-      service.createPeriod(body).subscribe((resp) => {
+      service.createPeriod(EVENT_ID, body).subscribe((resp) => {
         expect(resp).toEqual(response);
       });
 
-      const req = http.expectOne('/api/periods');
+      const req = http.expectOne(`/api/events/${EVENT_ID}/periods`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(body);
       req.flush(response);

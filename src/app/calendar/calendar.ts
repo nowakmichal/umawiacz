@@ -4,17 +4,20 @@ import {
   ElementRef,
   OnInit,
   PLATFORM_ID,
+  afterNextRender,
   computed,
   inject,
   signal,
 } from '@angular/core';
 import { isPlatformBrowser, CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval, startWith, switchMap } from 'rxjs';
 import { SELECTION_COLORS, SelectionColor, TimePeriod } from '../models/time-period.model';
+import { EventInfo } from '../models/event.model';
 import { PeriodService } from '../services/period.service';
+import { EventService } from '../services/event.service';
 import { AuthService } from '../services/auth.service';
 
 interface DayMarking {
@@ -34,24 +37,29 @@ interface CalendarDay {
 
 const POLL_INTERVAL_MS = 15_000;
 const USERNAME_KEY = 'umawiacz_username';
+const EVENT_NOT_FOUND_MSG = 'Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.';
+const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj ponownie.';
 
 @Component({
   selector: 'app-calendar',
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './calendar.html',
   styleUrl: './calendar.scss',
 })
 export class Calendar implements OnInit {
   private readonly today = new Date();
   private readonly periodService = inject(PeriodService);
+  private readonly eventService = inject(EventService);
   private readonly authService = inject(AuthService);
-  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly elementRef = inject(ElementRef);
+  private readonly route = inject(ActivatedRoute);
 
   // Flag to swallow the click event that fires after a touchstart on a marked day
   private pendingClickSwallow = false;
+
+  readonly eventId = this.route.snapshot.paramMap.get('eventId') ?? '';
 
   readonly selectionColors = SELECTION_COLORS;
 
@@ -62,6 +70,10 @@ export class Calendar implements OnInit {
   readonly hoverDate = signal<Date | null>(null);
   readonly periods = signal<TimePeriod[]>([]);
   readonly isSaving = signal(false);
+
+  readonly eventInfo = signal<EventInfo | null>(null);
+  readonly eventError = signal<string | null>(null);
+  readonly copiedLink = signal(false);
 
   readonly currentUser = signal<string | null>(null);
   readonly usernameInput = signal('');
@@ -74,6 +86,14 @@ export class Calendar implements OnInit {
   readonly monthLabel = computed(() =>
     this.viewDate().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' }),
   );
+
+  readonly eventDateLabel = computed(() => {
+    const evt = this.eventInfo();
+    if (!evt) return '';
+    const start = formatPlDate(evt.startDate);
+    if (evt.startDate === evt.endDate) return start;
+    return `${start} – ${formatPlDate(evt.endDate)}`;
+  });
 
   readonly weeks = computed<CalendarDay[][]>(() => {
     const view = this.viewDate();
@@ -132,23 +152,38 @@ export class Calendar implements OnInit {
 
   readonly weekDays = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 
-  ngOnInit(): void {
-    if (!isPlatformBrowser(this.platformId)) return;
-
-    // Set the username from authentication
-    const user = this.authService.currentUser();
-    if (user) {
-      this.currentUser.set(user.username);
-    } else {
-      // If not authenticated, redirect to login
-      // Note: This would be handled by the route guard in practice
-      this.router.navigate(['/login']);
+  constructor() {
+    // afterNextRender requires an injection context (ngOnInit has none -> NG0203);
+    // the constructor also runs during client bootstrap after SSR hydration.
+    // On the server it is a no-op, so the browser guard is only for clarity.
+    if (isPlatformBrowser(this.platformId)) {
+      afterNextRender(() => {
+        const user = this.authService.currentUser();
+        this.currentUser.set(user ? user.username : localStorage.getItem(USERNAME_KEY));
+      });
     }
+  }
+
+  ngOnInit(): void {
+    if (!this.eventId) {
+      this.eventError.set(EVENT_NOT_FOUND_MSG);
+      return;
+    }
+
+    this.eventService.getEventCalendar(this.eventId).subscribe({
+      next: ({ event, periods }) => {
+        this.eventInfo.set(event);
+        this.periods.set(periods);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.eventError.set(err.status === 404 ? EVENT_NOT_FOUND_MSG : EVENT_LOAD_ERROR_MSG);
+      },
+    });
 
     interval(POLL_INTERVAL_MS)
       .pipe(
         startWith(0),
-        switchMap(() => this.periodService.getPeriods()),
+        switchMap(() => this.periodService.getPeriods(this.eventId)),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
@@ -162,6 +197,16 @@ export class Calendar implements OnInit {
     if (!name) return;
     localStorage.setItem(USERNAME_KEY, name);
     this.currentUser.set(name);
+  }
+
+  copyLink(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    const url = `${window.location.origin}/calendar/${this.eventId}`;
+    navigator.clipboard?.writeText(url).catch(() => {});
+    this.copiedLink.set(true);
+    setTimeout(() => {
+      this.copiedLink.set(false);
+    }, 2000);
   }
 
   prevMonth(): void {
@@ -260,32 +305,48 @@ export class Calendar implements OnInit {
 
     this.isSaving.set(true);
     this.errorMessage.set(null);
-    this.periodService.createPeriod({ start: startStr, end: endStr, color, userName: user }).subscribe({
-      next: (resp) => {
-        this.periods.update((list) => [
-          ...list,
-          { id: resp.id, start: resp.start, end: resp.end, color: resp.color, userName: resp.userName },
-        ]);
-        this.selectionStart.set(null);
-        this.hoverDate.set(null);
-        this.isSaving.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        if (err.status === 409) {
-          // Server rejected: user already has a marking in this range
-          this.errorMessage.set('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
-        } else {
-          // Network/server unavailable — store locally as fallback
+    this.periodService
+      .createPeriod(this.eventId, { start: startStr, end: endStr, color, userName: user })
+      .subscribe({
+        next: (resp) => {
           this.periods.update((list) => [
             ...list,
-            { id: crypto.randomUUID(), start: startStr, end: endStr, color, userName: user },
+            {
+              id: resp.id,
+              eventId: this.eventId,
+              start: resp.start,
+              end: resp.end,
+              color: resp.color,
+              userName: resp.userName,
+            },
           ]);
-        }
-        this.selectionStart.set(null);
-        this.hoverDate.set(null);
-        this.isSaving.set(false);
-      },
-    });
+          this.selectionStart.set(null);
+          this.hoverDate.set(null);
+          this.isSaving.set(false);
+        },
+        error: (err: HttpErrorResponse) => {
+          if (err.status === 409) {
+            // Server rejected: user already has a marking in this range
+            this.errorMessage.set('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
+          } else {
+            // Network/server unavailable — store locally as fallback
+            this.periods.update((list) => [
+              ...list,
+              {
+                id: crypto.randomUUID(),
+                eventId: this.eventId,
+                start: startStr,
+                end: endStr,
+                color,
+                userName: user,
+              },
+            ]);
+          }
+          this.selectionStart.set(null);
+          this.hoverDate.set(null);
+          this.isSaving.set(false);
+        },
+      });
   }
 
   cancelSelection(): void {
@@ -295,7 +356,7 @@ export class Calendar implements OnInit {
 
   logout(): void {
     this.authService.logout();
-    this.router.navigate(['/login']);
+    this.currentUser.set(null);
   }
 
   isSelectionStart(day: CalendarDay): boolean {
@@ -343,4 +404,13 @@ function toIsoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+function formatPlDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('pl-PL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }

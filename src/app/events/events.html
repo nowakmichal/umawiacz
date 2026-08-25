@@ -1,0 +1,81 @@
+<div class="events-shell">
+  <header class="events-header">
+    <h1>Wydarzenia</h1>
+    <p class="events-subtitle">Utwórz wydarzenie i wyślij link do kalendarza, aby zbierać wolne terminy.</p>
+  </header>
+
+  @if (loadError()) {
+    <div class="error-banner" role="alert">
+      <span>{{ loadError() }}</span>
+      <button class="link-btn" (click)="loadEvents()">Spróbuj ponownie</button>
+    </div>
+  }
+
+  @if (isLoading()) {
+    <p class="hint">Ładowanie…</p>
+  } @else if (events().length === 0) {
+    <div class="empty-state">
+      <p>Brak wydarzeń — utwórz pierwsze poniżej.</p>
+    </div>
+  } @else {
+    <div class="events-list">
+      @for (evt of events(); track evt.id) {
+        <div class="event-card">
+          <div class="event-info">
+            <h2 class="event-name">{{ evt.name }}</h2>
+            <span class="event-dates">{{ dateLabel(evt) }}</span>
+            @if (evt.description) {
+              <p class="event-description">{{ evt.description }}</p>
+            }
+          </div>
+          <div class="event-actions">
+            <button class="copy-btn" (click)="copyLink(evt.id)">
+              {{ copiedId() === evt.id ? 'Skopiowano!' : 'Kopiuj link' }}
+            </button>
+            <button class="primary-btn" (click)="openEvent(evt.id)">Otwórz kalendarz</button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <section class="create-card">
+    <h2>Nowe wydarzenie</h2>
+
+    @if (createError()) {
+      <div class="error-banner" role="alert"><span>{{ createError() }}</span></div>
+    }
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="event-name">Nazwa wydarzenia</label>
+        <input id="event-name" type="text" [(ngModel)]="name" placeholder="np. Wakacje 2026" />
+      </div>
+      <div class="form-group">
+        <label for="event-start">Data początkowa</label>
+        <input id="event-start" type="date" [(ngModel)]="startDate" />
+      </div>
+      <div class="form-group">
+        <label for="event-end">Data końcowa</label>
+        <input id="event-end" type="date" [(ngModel)]="endDate" />
+      </div>
+      <div class="form-group form-group-wide">
+        <label for="event-description">Opis (opcjonalnie)</label>
+        <input
+          id="event-description"
+          type="text"
+          [(ngModel)]="description"
+          placeholder="np. Zaznaczcie dni, w których będziecie nieobecni"
+        />
+      </div>
+    </div>
+
+    <button
+      class="primary-btn"
+      [disabled]="isCreating() || !name.trim() || !startDate || !endDate"
+      (click)="create()"
+    >
+      {{ isCreating() ? 'Tworzenie…' : 'Utwórz wydarzenie' }}
+    </button>
+  </section>
+</div>

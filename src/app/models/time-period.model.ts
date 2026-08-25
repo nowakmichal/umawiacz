@@ -14,6 +14,7 @@ export const SELECTION_COLORS: ColorOption[] = [
 
 export interface TimePeriod {
   id: string;
+  eventId: string;
   start: string; // ISO date YYYY-MM-DD
   end: string; // ISO date YYYY-MM-DD
   color: SelectionColor;

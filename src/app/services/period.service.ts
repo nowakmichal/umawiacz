@@ -12,12 +12,12 @@ export class PeriodService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/periods';
 
-  getPeriods(): Observable<TimePeriod[]> {
-    return this.http.get<TimePeriod[]>(this.baseUrl);
+  getPeriods(eventId: string): Observable<TimePeriod[]> {
+    return this.http.get<TimePeriod[]>(`/api/events/${eventId}/periods`);
   }
 
-  createPeriod(req: CreateTimePeriodRequest): Observable<CreateTimePeriodResponse> {
-    return this.http.post<CreateTimePeriodResponse>(this.baseUrl, req);
+  createPeriod(eventId: string, req: CreateTimePeriodRequest): Observable<CreateTimePeriodResponse> {
+    return this.http.post<CreateTimePeriodResponse>(`/api/events/${eventId}/periods`, req);
   }
 
   deletePeriod(id: string): Observable<void> {

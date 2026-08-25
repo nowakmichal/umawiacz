@@ -69,6 +69,120 @@
   }
 }
 
+/* ── Event error panel ── */
+.event-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.event-error-card {
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  border-radius: 16px;
+  padding: 36px 32px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.event-error-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.event-error-msg {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.event-error-link {
+  align-self: center;
+  margin-top: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #1d4ed8;
+  }
+}
+
+/* ── Top bar ── */
+.cal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.topbar-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.copy-link-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #e5e7eb;
+  }
+}
+
+/* ── Event header ── */
+.event-header {
+  margin-bottom: 16px;
+}
+
+.event-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.event-dates {
+  font-size: 0.85rem;
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.event-desc {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 6px 0 0;
+}
+
 /* ── Shell ── */
 :host {
   display: block;
@@ -441,6 +555,10 @@
 
   .month-label {
     font-size: 1rem;
+  }
+
+  .event-name {
+    font-size: 1.15rem;
   }
 
   .nav-btn {

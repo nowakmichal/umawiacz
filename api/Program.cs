@@ -43,13 +43,74 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors();
 
-// ── GET /api/periods ─────────────────────────────────────────────────────────
-app.MapGet("/api/periods", async (AppDbContext db) =>
-    Results.Ok(await db.Periods.OrderBy(p => p.Start).ThenBy(p => p.UserName).ToListAsync()));
+// ── GET /api/events ──────────────────────────────────────────────────────────
+app.MapGet("/api/events", async (AppDbContext db) =>
+    Results.Ok(await db.Events.OrderBy(e => e.StartDate).ToListAsync()));
 
-// ── POST /api/periods ────────────────────────────────────────────────────────
-app.MapPost("/api/periods", async (CreateTimePeriodRequest req, AppDbContext db) =>
+// ── POST /api/events ─────────────────────────────────────────────────────────
+app.MapPost("/api/events", async (CreateEventRequest req, AppDbContext db) =>
 {
+    var name = req.Name?.Trim() ?? string.Empty;
+    if (name.Length == 0)
+        return Results.BadRequest(new { error = "Name is required." });
+
+    if (!DateOnly.TryParse(req.StartDate, out _) || !DateOnly.TryParse(req.EndDate, out _))
+        return Results.BadRequest(new { error = "StartDate and EndDate must be valid dates (YYYY-MM-DD)." });
+
+    if (string.Compare(req.StartDate, req.EndDate, StringComparison.Ordinal) > 0)
+        return Results.BadRequest(new { error = "StartDate must not be after EndDate." });
+
+    var evt = new EventInfo
+    {
+        Id = Guid.NewGuid().ToString(),
+        Name = name,
+        StartDate = req.StartDate,
+        EndDate = req.EndDate,
+        Description = req.Description?.Trim() ?? string.Empty,
+    };
+
+    db.Events.Add(evt);
+    await db.SaveChangesAsync();
+
+    return Results.Created($"/api/events/{evt.Id}", evt);
+});
+
+// ── GET /api/events/{id} ─────────────────────────────────────────────────────
+app.MapGet("/api/events/{id}", async (string id, AppDbContext db) =>
+{
+    var evt = await db.Events.FindAsync(id);
+    if (evt is null) return Results.NotFound();
+    return Results.Ok(evt);
+});
+
+// ── GET /api/events/{id}/calendar (public, for the shareable link) ───────────
+app.MapGet("/api/events/{id}/calendar", async (string id, AppDbContext db) =>
+{
+    var evt = await db.Events.FindAsync(id);
+    if (evt is null) return Results.NotFound();
+
+    var periods = await db.Periods.Where(p => p.EventId == id)
+        .OrderBy(p => p.Start).ThenBy(p => p.UserName).ToListAsync();
+
+    return Results.Ok(new EventCalendarResponse(evt, periods));
+});
+
+// ── GET /api/events/{id}/periods ─────────────────────────────────────────────
+app.MapGet("/api/events/{id}/periods", async (string id, AppDbContext db) =>
+{
+    var exists = await db.Events.AnyAsync(e => e.Id == id);
+    if (!exists) return Results.NotFound();
+
+    return Results.Ok(await db.Periods.Where(p => p.EventId == id)
+        .OrderBy(p => p.Start).ThenBy(p => p.UserName).ToListAsync());
+});
+
+// ── POST /api/events/{id}/periods ────────────────────────────────────────────
+app.MapPost("/api/events/{id}/periods", async (string id, CreateTimePeriodRequest req, AppDbContext db) =>
+{
+    var evt = await db.Events.FindAsync(id);
+    if (evt is null) return Results.NotFound();
+
     if (string.IsNullOrWhiteSpace(req.UserName))
         return Results.BadRequest(new { error = "UserName is required." });
 
@@ -64,9 +125,10 @@ app.MapPost("/api/periods", async (CreateTimePeriodRequest req, AppDbContext db)
     if (string.Compare(req.Start, req.End, StringComparison.Ordinal) > 0)
         return Results.BadRequest(new { error = "Start must not be after End." });
 
-    // A user may not mark any day they have already marked
+    // A user may not mark any day they have already marked within an event
     // YYYY-MM-DD dates compare correctly with lexicographic order
-    var userPeriods = await db.Periods.Where(p => p.UserName == userName).ToListAsync();
+    var userPeriods = await db.Periods
+        .Where(p => p.EventId == id && p.UserName == userName).ToListAsync();
     var overlap = userPeriods.Any(p =>
         string.Compare(p.Start, req.End, StringComparison.Ordinal) <= 0 &&
         string.Compare(p.End, req.Start, StringComparison.Ordinal) >= 0);
@@ -77,6 +139,7 @@ app.MapPost("/api/periods", async (CreateTimePeriodRequest req, AppDbContext db)
     var period = new TimePeriod
     {
         Id = Guid.NewGuid().ToString(),
+        EventId = id,
         Start = req.Start,
         End = req.End,
         Color = req.Color,

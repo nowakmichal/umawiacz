@@ -35,7 +35,7 @@ export class LoginComponent {
       next: (response: LoginResponse) => {
         if (response.success) {
           this.authService.login(response);
-          this.router.navigate(['/calendar']);
+          this.router.navigate(['/events']);
         } else {
           this.errorMessage.set('Nieprawidłowa nazwa użytkownika');
         }
