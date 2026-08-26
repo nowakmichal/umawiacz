@@ -9,7 +9,7 @@ import { LoginRequest, LoginResponse } from '../models/login.model';
 @Component({
   selector: 'app-login',
   templateUrl: './login.html',
-  styleUrls: ['./login.scss'],
+  styleUrl: './login.scss',
   imports: [FormsModule]
 })
 export class LoginComponent {
@@ -33,12 +33,8 @@ export class LoginComponent {
 
     this.loginService.login(request).subscribe({
       next: (response: LoginResponse) => {
-        if (response.success) {
-          this.authService.login(response);
-          this.router.navigate(['/events']);
-        } else {
-          this.errorMessage.set('Nieprawidłowa nazwa użytkownika');
-        }
+        this.authService.login(response);
+        this.router.navigate(['/events']);
       },
       error: (error: HttpErrorResponse) => {
         if (error.status === 400) {

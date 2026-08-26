@@ -1,19 +1,15 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import {
-  CreateTimePeriodRequest,
-  CreateTimePeriodResponse,
-  TimePeriod,
-} from '../models/time-period.model';
+import { CreateTimePeriodRequest, CreateTimePeriodResponse, Period } from '../models/period.model';
 
 @Injectable({ providedIn: 'root' })
 export class PeriodService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/periods';
 
-  getPeriods(eventId: string): Observable<TimePeriod[]> {
-    return this.http.get<TimePeriod[]>(`/api/events/${eventId}/periods`);
+  getPeriods(eventId: string): Observable<Period[]> {
+    return this.http.get<Period[]>(`/api/events/${eventId}/periods`);
   }
 
   createPeriod(eventId: string, req: CreateTimePeriodRequest): Observable<CreateTimePeriodResponse> {

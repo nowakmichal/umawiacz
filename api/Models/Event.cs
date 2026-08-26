@@ -1,6 +1,6 @@
 namespace Umawiacz.Api.Models;
 
-public class EventInfo
+public class Event
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

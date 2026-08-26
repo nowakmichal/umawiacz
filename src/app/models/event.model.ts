@@ -1,6 +1,6 @@
-import { TimePeriod } from './time-period.model';
+import { Period } from './period.model';
 
-export interface EventInfo {
+export interface Event {
   id: string;
   name: string;
   startDate: string; // ISO date YYYY-MM-DD
@@ -16,6 +16,6 @@ export interface CreateEventRequest {
 }
 
 export interface EventCalendar {
-  event: EventInfo;
-  periods: TimePeriod[];
+  event: Event;
+  periods: Period[];
 }

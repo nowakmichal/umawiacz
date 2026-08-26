@@ -2,14 +2,14 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { EventService } from './event.service';
-import { CreateEventRequest, EventCalendar, EventInfo } from '../models/event.model';
+import { CreateEventRequest, Event, EventCalendar } from '../models/event.model';
 
 describe('EventService', () => {
   let service: EventService;
   let http: HttpTestingController;
 
   const EVENT_ID = 'ev-123';
-  const event: EventInfo = {
+  const event: Event = {
     id: EVENT_ID,
     name: 'Wakacje 2026',
     startDate: '2026-06-01',
@@ -42,18 +42,6 @@ describe('EventService', () => {
       const req = http.expectOne('/api/events');
       expect(req.request.method).toBe('GET');
       req.flush([event]);
-    });
-  });
-
-  describe('getEvent', () => {
-    it('should GET /api/events/{id}', () => {
-      service.getEvent(EVENT_ID).subscribe((evt) => {
-        expect(evt).toEqual(event);
-      });
-
-      const req = http.expectOne(`/api/events/${EVENT_ID}`);
-      expect(req.request.method).toBe('GET');
-      req.flush(event);
     });
   });
 

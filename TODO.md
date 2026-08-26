@@ -1,110 +1,34 @@
 # TODO
 
-## 1. ~~Replace password login with username-only login~~ — DONE
+## 1. Normalize the database schema
 
-- Remove password from the login flow entirely (no `Password` field in `LoginRequest`, no password check in `POST /api/login`).
-- Login is username only, case-insensitive: `test`, `Test`, `TEST` are all the same user.
-- Normalize username (e.g. lowercase) on login and when storing/comparing `UserName` on periods, so the same user is always treated as the same user.
-- Frontend: remove the password field from the login form and stop sending it; adjust `AuthService` and related UI.
-- Files to touch: `api/Program.cs`, `api/Models/LoginRequest.cs`, `src/app` login screen and auth service.
+- [x] Add a `User` entity (`Id`, `Name`) to `api/Models/` and register it in `AppDbContext`.
+- [x] Rename `EventInfo` → `Event` and `TimePeriod` → `Period` (models + `AppDbContext` set names).
+- [x] Wire relations: `Period.UserId` FK → `User` (replacing the raw `UserName` string), `Period.EventId` FK → `Event`, cascade delete from Event to its periods.
+- [x] Add constraints: unique on `User.Name` (stored lowercase), index on `Period` (`EventId`, `UserId`).
+- [x] Update `POST /api/login` to create-or-get the `User` row and return its `id`.
+- [x] Update `POST /api/events/{id}/periods` to resolve the user by name and store `UserId`; keep the per-user, per-event overlap check (409).
+- [x] Delete `api/umawiacz.db` and let `EnsureCreated()` rebuild the schema (no migrations in use).
+- [x] Update frontend models (`event.model.ts`, `time-period.model.ts`, `login.model.ts`) to match the new JSON shape.
 
-## 2. ~~Switch from InMemory database to SQLite~~ — DONE
+## 2. Check the Docker files
 
-- Replace `UseInMemoryDatabase("UmawiaczDb")` with SQLite (connection string, file in `api/`).
-- Create the database on startup if it does not exist (e.g. `EnsureCreated()` or a migration).
-- Update `api/Umawiacz.Api.csproj` (drop `Microsoft.EntityFrameworkCore.InMemory`, add `Microsoft.EntityFrameworkCore.Sqlite`), `AppDbContext` configuration, `appsettings.json`, and the Docker setup (volume mount for the DB file).
-- Verify all endpoints (`GET/POST/DELETE /api/periods`) work against SQLite and existing tests still pass.
+- [x] `api/Dockerfile`: verify restore-then-copy build works and `bin`/`obj` are excluded via `api/.dockerignore`. (Verified: single csproj, `dotnet publish -c Release` succeeds; `.dockerignore` excludes `bin/`, `obj/`, `umawiacz.db`, `data/`.)
+- [x] `Dockerfile`: verify `npm run build` output path matches `COPY --from=builder /app/dist/umawiacz/`. (Verified: build outputs `dist/umawiacz/{browser,server}`, `server/server.mjs` present as the CMD target.)
+- [x] `docker-compose.yml`: verify the SQLite volume (`./api/data` ↔ `Data Source=/app/data/umawiacz.db`) and the `API_URL` wiring for the SSR proxy. (Verified: `ConnectionStrings__UmawiaczDb` matches `GetConnectionString("UmawiaczDb")` in Program.cs; `API_URL` is read by `src/server.ts`.)
+- [x] ~~Build both images and `docker compose up`~~ — Docker daemon unavailable in this environment; ran the local equivalents instead: built both artifacts (`dotnet publish`, `npm run build`) and smoke tested login → create event → add period → 409 on overlap → public calendar payload, plus SSR render + `/api` proxy on :4000 with `API_URL` set as in compose.
 
-## 3. Add event functionality
+## 3. Review all code (frontend + backend)
 
-Spec: a screen to create an event (name, dates, description); each event gets a calendar tied to a shareable link `/calendar/:eventId` that can be sent to users; periods are scoped per event, not to a global user calendar; viewing an event calendar requires no login.
+- [x] Remove `src/app/home` (component + spec) — not referenced by any route.
+- [x] Delete `api/bin` (incl. the stale `net9.0` artifacts) and `api/obj`; confirm `.gitignore` keeps them out.
+- [x] Search for and remove dead code / hardcoded login leftovers (demo credentials, fallback usernames). (No demo credentials or fallback usernames existed; removed the dead `response.success` branch in `login.ts` and the unused `EventService.getEvent()`.)
+- [x] Fix naming inconsistencies between frontend and backend (`EventInfo`/`TimePeriod` vs `Event`/`Period`). (Renamed frontend `EventInfo` → `Event`, `TimePeriod` → `Period`, `time-period.model.ts` → `period.model.ts`; kept `CreateTimePeriodRequest`/`CreateTimePeriodResponse` to match the backend DTO names.)
+- [x] Verify all UI text stays in Polish (pl-PL locale, Polish dates).
+- [x] Update `AGENTS.md` if endpoints, models, or architecture change. (Verified: endpoints, routing, and locale notes are current — no changes needed.)
 
-### 3.1 ~~Backend: `Event` entity and models~~ — DONE
+## 4. Verify
 
-- `api/Models/EventInfo.cs` (Id, Name, StartDate, EndDate, Description), `api/Models/CreateEventRequest.cs` (record), `api/Models/EventCalendarResponse.cs` (record: event + periods).
-- `api/Models/TimePeriod.cs` gained `EventId`; `api/AppDbContext.cs` gained `DbSet<EventInfo> Events`.
-- Old dev DB deleted (`api/umawiacz.db`); `EnsureCreated()` rebuilds the schema on next run.
-- Verify: `cd api && dotnet build` → 0 warnings, 0 errors.
-
-### 3.2 ~~Backend: event endpoints + event-scoped period endpoints~~ — DONE
-
-- `GET /api/events`, `POST /api/events` (validates name, `YYYY-MM-DD` dates, start ≤ end), `GET /api/events/{id}` (404 for unknown).
-- `GET /api/events/{id}/calendar` — **public**, returns `{ event, periods }` for the shareable link (404 for unknown).
-- `GET /api/events/{id}/periods`, `POST /api/events/{id}/periods` — 404 for unknown event; `userName` trimmed + lowercased; overlap check scoped to event + user (409).
-- `DELETE /api/periods/{id}` and `POST /api/login` unchanged.
-- Verify: `cd api && dotnet build`; curl each endpoint against a running backend.
-
-### 3.3 ~~Frontend: event models and services~~ — DONE
-
-- `src/app/models/event.model.ts`: `EventInfo`, `CreateEventRequest`, `EventCalendar { event, periods }`.
-- `src/app/models/time-period.model.ts`: `TimePeriod` gained `eventId: string` (note the field is `userName`, capital N — matches the backend JSON).
-- `src/app/services/event.service.ts`: `getEvents()`, `getEvent(id)`, `getEventCalendar(id)`, `createEvent(req)`.
-- `src/app/services/period.service.ts`: `getPeriods(eventId)` → GET `/api/events/{eventId}/periods`; `createPeriod(eventId, req)` → POST `/api/events/{eventId}/periods`; `deletePeriod(id)` unchanged.
-- Verify: `npx tsc --noEmit -p tsconfig.app.json` (the app build won't catch these — they are only reachable via specs until 3.5).
-
-### 3.4 ~~Frontend: events screen (list + create)~~ — DONE
-
-- `src/app/events/events.ts` — `EventList` component: event list (name, date range, description), "Otwórz kalendarz", "Kopiuj link" (clipboard + "Skopiowano!" feedback), create form (name, start, end, optional description) with client-side validation and error banner, loading/empty states. All UI text in Polish.
-- `src/app/events/events.html`, `src/app/events/events.scss` — styles consistent with the calendar screen (white cards, `#2563eb` primary).
-- Not wired into routing yet (see 3.5).
-- Verify: `npx tsc --noEmit -p tsconfig.app.json` — passes.
-
-### 3.5 ~~Frontend: routing + login redirect~~ — DONE
-
-Files: `src/app/app.routes.ts`, `src/app/app.routes.server.ts`, `src/app/login/login.ts`.
-
-- `app.routes.ts`:
-  - `''` → `redirectTo: 'events'` (full match).
-  - `calendar` (no param) → `redirectTo: 'events'` (legacy link).
-  - `events` → `loadComponent` `EventList`, `canActivate: [authGuard]`.
-  - `calendar/:eventId` → `Calendar`, **public — no guard**.
-  - `login` → `LoginComponent`.
-- `app.routes.server.ts`: add explicit `{ path: 'calendar/:eventId', renderMode: RenderMode.SSR, component: Calendar }` before the existing `{ path: '**', renderMode: RenderMode.Prerender }` (the param route must be SSR'd on demand, never prerendered).
-- `login.ts`: after successful login, navigate to `/events` instead of `/calendar`.
-- Acceptance: `npm run build` passes; with `npm start`: `/` unauthenticated → `/login`; `/events` unauthenticated → `/login`; `/calendar/<any-id>` renders without login.
-
-### 3.6 ~~Frontend: event-aware public calendar~~ — DONE
-
-Files: `src/app/calendar/calendar.ts` (full rewrite), `calendar.html`, `calendar.scss`. Note: `calendar.ts` currently has 6 TS errors against the new `PeriodService`/`TimePeriod` signatures — this task fixes them.
-
-- `calendar.ts`:
-  - `eventId` from `ActivatedRoute.snapshot.paramMap.get('eventId')`.
-  - One-shot load via `EventService.getEventCalendar(eventId)` → signals `eventInfo` + `periods`; on error set `eventError` (404 → "Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.", other → generic) and render an error panel instead of the calendar.
-  - Keep 15 s polling, now `periodService.getPeriods(eventId)` via `interval` + `startWith(0)` + `switchMap` + `takeUntilDestroyed`; silently ignore poll errors.
-  - `currentUser`: logged-in `AuthService.currentUser()?.username`, else `localStorage.getItem('umawiacz_username')`, else `null` → existing guest name modal (unchanged flow; `confirmUsername` still writes `umawiacz_username`).
-  - `onDayClick` → `periodService.createPeriod(eventId, …)`; the offline fallback local period object must include `eventId`.
-  - New: `copyLink()` → `navigator.clipboard?.writeText(${window.location.origin}/calendar/${eventId})` with a temporary "Skopiowano!" state.
-  - `logout()` → `authService.logout()` + `currentUser.set(null)` — user stays on the page as a guest, **no navigation** (page is public now).
-  - Remove the `router.navigate(['/login'])` calls — the page no longer requires auth. This changes the NG04002 test-error baseline in AGENTS.md (see 3.8).
-- `calendar.html`:
-  - Wrap: `@if (eventError())` → centered error card (message + `routerLink` "Przejdź do wydarzeń" → `/events`); `@else` → existing shell.
-  - New top bar in the shell: `routerLink` "Moje wydarzenia" → `/events` (left) and "Kopiuj link" button (right).
-  - New event header block below the top bar: event name (`h1`), date range formatted `pl-PL` (single date if start == end, e.g. `15.06.2026`, else `01.06.2026 – 15.06.2026`), optional description line.
-  - Existing content (month nav, color toolbar, grid, tooltip, username modal) unchanged otherwise; the username modal still shows when `!currentUser()`.
-- `calendar.scss`: styles for the top bar, event header, and error card using the existing palette (`#111827`, `#6b7280`, `#2563eb`, `#fef2f2`/`#fecaca` error tones).
-- Acceptance: `npm run build` passes; guest opens `/calendar/<id>` → name modal → can add a period; unknown id → error panel, no infinite error spam (poll failures silent).
-
-### 3.7 Frontend: tests
-
-Files: `src/app/calendar/calendar.spec.ts` (update), `src/app/services/period.service.spec.ts` (update), `src/app/services/event.service.spec.ts` (new), `src/app/events/events.spec.ts` (new).
-
-- `calendar.spec.ts`: provide mocked `ActivatedRoute` (`snapshot.paramMap` → `eventId`, e.g. `'test-event'`), mock `EventService` (`getEventCalendar` success fixture `{ event, periods }` + a 404 case), update `PeriodService` mocks to new signatures (`getPeriods(eventId)`, `createPeriod(eventId, req)`), add `eventId` to all `TimePeriod` fixtures. Keep existing coverage (selection flow, color change, removal, touch swallow, guest modal) and add: loads event via `getEventCalendar(eventId)`; 404 → error panel; `copyLink` sets the copied state; logout clears `currentUser` without navigation.
-- `period.service.spec.ts`: expect `/api/events/{eventId}/periods` URLs; `deletePeriod` expectations unchanged.
-- `event.service.spec.ts`: `getEvents` / `getEvent` / `getEventCalendar` / `createEvent` hit the right URLs (pattern of `period.service.spec.ts`).
-- `events.spec.ts`: `EventList` — loads on init, empty state, create validation errors, successful create appends + resets form, `openEvent` navigates to `/calendar/<id>` (mock `Router`).
-- Conventions (see AGENTS.md): localStorage via `vi.spyOn(Storage.prototype, 'getItem')`, `provideHttpClientTesting` + `HttpTestingController`, `{ provide: PLATFORM_ID, useValue: 'browser' }` for Calendar, `vi.clearAllMocks()` in `beforeEach`.
-- Acceptance: `npm test -- --watch=false` → `Tests N passed (N)` with 0 failures (exit code 1 due to the known NG04002 baseline is expected — see 3.8).
-
-### 3.8 Verification + docs
-
-- `npm run build` and `cd api && dotnet build` both pass.
-- Smoke test with backend running (`cd api && dotnet run`, then `npm start`): create an event at `/events` → open the copy link in a new tab/profile as a guest → add a period as a different guest → reload, period persists; DELETE via right-click works; `/calendar/unknown` → error panel.
-- Update `AGENTS.md`: endpoints section (new `/api/events*` endpoints, scoped periods), routing section (`/` → `/events`, public `/calendar/:eventId`), note that the calendar is now public and polls the event-scoped endpoint, and correct the NG04002 baseline count (removing `router.navigate` from Calendar's `ngOnInit` should lower it; record the new number).
-- Acceptance: all commands pass; `git status` shows no unintended files.
-
-## 4. Refactor and review
-
-- Normalize the database schema (entities: `User`, `Event`, `Period` with proper relations/unique constraints; no duplicated data, consistent naming).
-- Check the Docker files: `Dockerfile`, `api/Dockerfile`, `docker-compose.yml` — correct build, ports, volumes for the SQLite file, `API_URL` wiring.
-- Review all code in the app (frontend and backend): remove dead code (e.g. hardcoded login leftovers, net9.0 build artifacts in `api/bin`), fix inconsistencies, clean up naming, keep Polish locale for all UI text.
-- Run `npm test -- --watch=false` and the backend after changes to confirm nothing is broken.
+- [x] `npm test -- --watch=false` finishes fully green (exit code 0, no unhandled errors). (6 files, 58 tests passed.)
+- [x] `npm run build` (SSR production build) passes. (AOT + 4 prerendered routes.)
+- [x] Start the backend and smoke test the endpoints: event create/list/get, period 409 on overlap, 404s for unknown ids, public calendar payload. (All passed: login 200, event create 201, list/get 200, period create 201, overlap 409, unknown id/calendar 404, public calendar 200 with `{ event, periods }`. Test data removed afterwards.)

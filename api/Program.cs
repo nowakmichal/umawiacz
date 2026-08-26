@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Umawiacz.Api;
 using Umawiacz.Api.Models;
 
@@ -22,6 +23,7 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
 {
     opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     opts.SerializerOptions.PropertyNameCaseInsensitive = true;
+    opts.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 
 // ── CORS: allow the Angular dev server and SSR server ───────────────────────
@@ -60,7 +62,7 @@ app.MapPost("/api/events", async (CreateEventRequest req, AppDbContext db) =>
     if (string.Compare(req.StartDate, req.EndDate, StringComparison.Ordinal) > 0)
         return Results.BadRequest(new { error = "StartDate must not be after EndDate." });
 
-    var evt = new EventInfo
+    var evt = new Event
     {
         Id = Guid.NewGuid().ToString(),
         Name = name,
@@ -90,7 +92,8 @@ app.MapGet("/api/events/{id}/calendar", async (string id, AppDbContext db) =>
     if (evt is null) return Results.NotFound();
 
     var periods = await db.Periods.Where(p => p.EventId == id)
-        .OrderBy(p => p.Start).ThenBy(p => p.UserName).ToListAsync();
+        .Include(p => p.User)
+        .OrderBy(p => p.Start).ThenBy(p => p.User.Name).ToListAsync();
 
     return Results.Ok(new EventCalendarResponse(evt, periods));
 });
@@ -102,7 +105,8 @@ app.MapGet("/api/events/{id}/periods", async (string id, AppDbContext db) =>
     if (!exists) return Results.NotFound();
 
     return Results.Ok(await db.Periods.Where(p => p.EventId == id)
-        .OrderBy(p => p.Start).ThenBy(p => p.UserName).ToListAsync());
+        .Include(p => p.User)
+        .OrderBy(p => p.Start).ThenBy(p => p.User.Name).ToListAsync());
 });
 
 // ── POST /api/events/{id}/periods ────────────────────────────────────────────
@@ -116,6 +120,17 @@ app.MapPost("/api/events/{id}/periods", async (string id, CreateTimePeriodReques
 
     var userName = req.UserName.Trim().ToLowerInvariant();
 
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Name == userName);
+    if (user is null)
+    {
+        user = new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = userName,
+        };
+        db.Users.Add(user);
+    }
+
     if (req.Color is not ("green" or "orange" or "red"))
         return Results.BadRequest(new { error = "Color must be 'green', 'orange', or 'red'." });
 
@@ -128,7 +143,7 @@ app.MapPost("/api/events/{id}/periods", async (string id, CreateTimePeriodReques
     // A user may not mark any day they have already marked within an event
     // YYYY-MM-DD dates compare correctly with lexicographic order
     var userPeriods = await db.Periods
-        .Where(p => p.EventId == id && p.UserName == userName).ToListAsync();
+        .Where(p => p.EventId == id && p.UserId == user.Id).ToListAsync();
     var overlap = userPeriods.Any(p =>
         string.Compare(p.Start, req.End, StringComparison.Ordinal) <= 0 &&
         string.Compare(p.End, req.Start, StringComparison.Ordinal) >= 0);
@@ -136,14 +151,15 @@ app.MapPost("/api/events/{id}/periods", async (string id, CreateTimePeriodReques
     if (overlap)
         return Results.Conflict(new { error = "You have already marked one or more days in this range." });
 
-    var period = new TimePeriod
+    var period = new Period
     {
         Id = Guid.NewGuid().ToString(),
         EventId = id,
         Start = req.Start,
         End = req.End,
         Color = req.Color,
-        UserName = userName,
+        UserId = user.Id,
+        User = user,
     };
 
     db.Periods.Add(period);
@@ -165,15 +181,28 @@ app.MapDelete("/api/periods/{id}", async (string id, AppDbContext db) =>
 });
 
 // ── POST /api/login ──────────────────────────────────────────────────────────
-app.MapPost("/api/login", (LoginRequest request) =>
+app.MapPost("/api/login", async (LoginRequest request, AppDbContext db) =>
 {
     var username = request.Username?.Trim().ToLowerInvariant() ?? string.Empty;
     if (username.Length == 0)
         return Results.BadRequest(new { error = "Username is required." });
 
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Name == username);
+    if (user is null)
+    {
+        user = new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = username,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+    }
+
     return Results.Ok(new LoginResponse
     {
-        Username = username,
+        Id = user.Id,
+        Username = user.Name,
         Success = true,
     });
 });

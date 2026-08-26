@@ -14,8 +14,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval, startWith, switchMap } from 'rxjs';
-import { SELECTION_COLORS, SelectionColor, TimePeriod } from '../models/time-period.model';
-import { EventInfo } from '../models/event.model';
+import { SELECTION_COLORS, SelectionColor, Period } from '../models/period.model';
+import { Event } from '../models/event.model';
 import { PeriodService } from '../services/period.service';
 import { EventService } from '../services/event.service';
 import { AuthService } from '../services/auth.service';
@@ -68,10 +68,10 @@ export class Calendar implements OnInit {
   readonly isErasing = signal(false);
   readonly selectionStart = signal<Date | null>(null);
   readonly hoverDate = signal<Date | null>(null);
-  readonly periods = signal<TimePeriod[]>([]);
+  readonly periods = signal<Period[]>([]);
   readonly isSaving = signal(false);
 
-  readonly eventInfo = signal<EventInfo | null>(null);
+  readonly eventInfo = signal<Event | null>(null);
   readonly eventError = signal<string | null>(null);
   readonly copiedLink = signal(false);
 

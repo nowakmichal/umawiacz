@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { PeriodService } from './period.service';
-import { CreateTimePeriodRequest, TimePeriod } from '../models/time-period.model';
+import { CreateTimePeriodRequest, Period } from '../models/period.model';
 
 describe('PeriodService', () => {
   let service: PeriodService;
@@ -28,7 +28,7 @@ describe('PeriodService', () => {
 
   describe('getPeriods', () => {
     it('should GET /api/events/{eventId}/periods', () => {
-      const expected: TimePeriod[] = [
+      const expected: Period[] = [
         {
           id: '1',
           eventId: EVENT_ID,

@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { CreateEventRequest, EventInfo } from '../models/event.model';
+import { CreateEventRequest, Event } from '../models/event.model';
 import { EventService } from '../services/event.service';
 
 @Component({
@@ -15,7 +15,7 @@ export class EventList implements OnInit {
   private readonly eventService = inject(EventService);
   private readonly router = inject(Router);
 
-  readonly events = signal<EventInfo[]>([]);
+  readonly events = signal<Event[]>([]);
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
 
@@ -102,7 +102,7 @@ export class EventList implements OnInit {
     });
   }
 
-  dateLabel(evt: EventInfo): string {
+  dateLabel(evt: Event): string {
     const start = this.formatDate(evt.startDate);
     const end = this.formatDate(evt.endDate);
     if (start === end) return start;

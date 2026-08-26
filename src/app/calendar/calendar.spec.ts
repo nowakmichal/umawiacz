@@ -6,13 +6,13 @@ import { Calendar } from './calendar';
 import { PeriodService } from '../services/period.service';
 import { EventService } from '../services/event.service';
 import { AuthService } from '../services/auth.service';
-import { SELECTION_COLORS, TimePeriod } from '../models/time-period.model';
-import { EventInfo } from '../models/event.model';
+import { SELECTION_COLORS, Period } from '../models/period.model';
+import { Event } from '../models/event.model';
 import { HttpErrorResponse } from '@angular/common/http';
 
 const EVENT_ID = 'test-event';
 
-const mockEvent: EventInfo = {
+const mockEvent: Event = {
   id: EVENT_ID,
   name: 'Wakacje 2026',
   startDate: '2026-06-01',
@@ -55,7 +55,7 @@ describe('Calendar', () => {
   let authService: MockAuthService;
   let router: Router;
 
-  const mockPeriods: TimePeriod[] = [
+  const mockPeriods: Period[] = [
     { id: 'p1', eventId: EVENT_ID, start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Ala' },
     { id: 'p2', eventId: EVENT_ID, start: '2026-06-10', end: '2026-06-12', color: 'orange', userName: 'Ola' },
   ];

@@ -4,7 +4,7 @@ import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { EventList } from './events';
 import { EventService } from '../services/event.service';
-import { EventInfo } from '../models/event.model';
+import { Event } from '../models/event.model';
 
 function createEventServiceMock() {
   return {
@@ -15,7 +15,7 @@ function createEventServiceMock() {
 
 type MockEventService = ReturnType<typeof createEventServiceMock>;
 
-const event1: EventInfo = {
+const event1: Event = {
   id: 'ev-1',
   name: 'Wakacje 2026',
   startDate: '2026-06-01',
@@ -107,7 +107,7 @@ describe('EventList', () => {
 
   describe('create success', () => {
     it('should append the new event sorted by start date and reset the form', () => {
-      const newEvent: EventInfo = {
+      const newEvent: Event = {
         id: 'ev-2',
         name: 'Nowe',
         startDate: '2026-07-01',
