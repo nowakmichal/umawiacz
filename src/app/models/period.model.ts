@@ -1,5 +1,3 @@
-import { User } from './login.model';
-
 export type SelectionColor = 'green' | 'red';
 
 export interface ColorOption {
@@ -16,11 +14,9 @@ export const SELECTION_COLORS: ColorOption[] = [
 export interface Period {
   id: string;
   eventId: string;
-  userId?: string;
   start: string; // ISO date YYYY-MM-DD
   end: string; // ISO date YYYY-MM-DD
   color: SelectionColor;
-  user?: User;
   userName: string;
 }
 

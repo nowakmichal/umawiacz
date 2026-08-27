@@ -31,18 +31,20 @@
   <div class="calendar-shell">
     <div class="cal-topbar">
       <a class="topbar-link" routerLink="/events">Moje wydarzenia</a>
-      <button class="copy-link-btn" (click)="copyLink()">
-        {{ copiedLink() ? 'Skopiowano!' : 'Kopiuj link' }}
-      </button>
+      <div class="topbar-actions">
+        @if (currentUser()) {
+          <span class="user-chip">{{ currentUser() }}</span>
+          <button class="logout-btn" (click)="logout()" aria-label="Wyloguj">Wyloguj</button>
+        }
+        <button class="copy-link-btn" (click)="copyLink()">
+          {{ copiedLink() ? 'Skopiowano!' : 'Kopiuj link' }}
+        </button>
+      </div>
     </div>
 
     @if (eventInfo(); as e) {
       <div class="event-header">
         <h1 class="event-name">{{ e.name }}</h1>
-        @if (currentUser()) {
-          <span class="user-chip">{{ currentUser() }}</span>
-          <button class="logout-btn" (click)="logout()" aria-label="Wyloguj">Wyloguj</button>
-        }
         <span class="event-dates">{{ eventDateLabel() }}</span>
         @if (e.description) {
           <p class="event-desc">{{ e.description }}</p>
