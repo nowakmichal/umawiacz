@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  OnDestroy,
   OnInit,
   PLATFORM_ID,
   afterNextRender,
@@ -37,6 +38,7 @@ interface CalendarDay {
 }
 
 const POLL_INTERVAL_MS = 15_000;
+const LONG_PRESS_MS = 450;
 const USERNAME_KEY = 'umawiacz_username';
 const EVENT_NOT_FOUND_MSG = 'Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.';
 const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj ponownie.';
@@ -47,7 +49,7 @@ const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj p
   templateUrl: './calendar.html',
   styleUrl: './calendar.scss',
 })
-export class Calendar implements OnInit {
+export class Calendar implements OnInit, OnDestroy {
   private readonly today = new Date();
   private readonly periodService = inject(PeriodService);
   private readonly eventService = inject(EventService);
@@ -57,8 +59,9 @@ export class Calendar implements OnInit {
   private readonly elementRef = inject(ElementRef);
   private readonly route = inject(ActivatedRoute);
 
-  // Flag to swallow the click event that fires after a touchstart on a marked day
+  // Flag to swallow the synthetic click that follows a tooltip dismiss or a long-press touch
   private pendingClickSwallow = false;
+  private longPressTimer: number | null = null;
 
   readonly eventId = this.route.snapshot.paramMap.get('eventId') ?? '';
 
@@ -171,6 +174,10 @@ export class Calendar implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    this.cancelLongPress();
+  }
+
   ngOnInit(): void {
     if (!this.eventId) {
       this.eventError.set(EVENT_NOT_FOUND_MSG);
@@ -261,8 +268,9 @@ export class Calendar implements OnInit {
 
   /**
    * On touch devices, touchstart fires before click.
-   * We use a flag to swallow the subsequent click when showing/hiding the tooltip,
-   * so that the selection flow doesn't start unintentionally.
+   * A plain touch on a marked day arms a long-press timer for the tooltip.
+   * A flag swallows the subsequent click when dismissing the tooltip or when
+   * the long-press fires, so the selection flow doesn't start unintentionally.
    */
   onDayTouchStart(day: CalendarDay, event: TouchEvent): void {
     // A new touch begins: drop any stale swallow left by a previous touch whose
@@ -279,9 +287,23 @@ export class Calendar implements OnInit {
     }
 
     if (day.markings.length) {
-      this.positionTooltip(day, event.currentTarget as HTMLElement);
-      this.pendingClickSwallow = true;
+      this.startLongPress(day, event.currentTarget as HTMLElement);
     }
+  }
+
+  private startLongPress(day: CalendarDay, el: HTMLElement): void {
+    this.cancelLongPress();
+    this.longPressTimer = window.setTimeout(() => {
+      this.longPressTimer = null;
+      this.positionTooltip(day, el);
+      this.pendingClickSwallow = true;
+    }, LONG_PRESS_MS);
+  }
+
+  cancelLongPress(): void {
+    if (this.longPressTimer === null) return;
+    window.clearTimeout(this.longPressTimer);
+    this.longPressTimer = null;
   }
 
   onDayClick(day: CalendarDay): void {

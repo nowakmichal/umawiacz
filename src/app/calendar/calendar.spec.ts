@@ -474,6 +474,10 @@ describe('Calendar', () => {
       return dayCells()[component.weeks().flat().indexOf(day)];
     }
 
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('does not swallow the click on an unmarked day, so a tap starts the selection', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       const day = dayOfMonth(6);
@@ -486,16 +490,48 @@ describe('Calendar', () => {
       expect(component.selectionStart()).toEqual(day.date);
     });
 
-    it('shows the tooltip on a marked day and swallows the following click', () => {
+    it('does not open the tooltip on a plain touch of a marked day; the tap starts the selection', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       const day = dayOfMonth(1);
       if (!day) return;
 
       component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      expect(component.tooltipDay()).toBeNull();
+
+      component.onDayClick(day);
+      expect(component.selectionStart()).toEqual(day.date);
+    });
+
+    it('opens the tooltip on a long press of a marked day and swallows the following click', () => {
+      vi.useFakeTimers();
+      component.viewDate.set(new Date(2026, 5, 1));
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      vi.advanceTimersByTime(449);
+      expect(component.tooltipDay()).toBeNull();
+
+      vi.advanceTimersByTime(1);
       expect(component.tooltipDay()).toBe(day);
 
       component.onDayClick(day);
       expect(component.selectionStart()).toBeNull();
+    });
+
+    it('cancels the pending long press on a quick tap, so the tap starts the selection', () => {
+      vi.useFakeTimers();
+      component.viewDate.set(new Date(2026, 5, 1));
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      component.cancelLongPress();
+      vi.advanceTimersByTime(500);
+      expect(component.tooltipDay()).toBeNull();
+
+      component.onDayClick(day);
+      expect(component.selectionStart()).toEqual(day.date);
     });
 
     it('hides an open tooltip on a tap elsewhere and swallows that click', () => {
@@ -504,8 +540,7 @@ describe('Calendar', () => {
       const other = dayOfMonth(6);
       if (!marked || !other) return;
 
-      component.onDayTouchStart(marked, { currentTarget: cellFor(marked) } as unknown as TouchEvent);
-      expect(component.tooltipDay()).toBe(marked);
+      component.tooltipDay.set(marked);
 
       component.onDayTouchStart(other, { currentTarget: cellFor(other) } as unknown as TouchEvent);
       expect(component.tooltipDay()).toBeNull();
@@ -537,6 +572,33 @@ describe('Calendar', () => {
         end: '2026-06-07',
         color: 'green',
         userName: 'Ala',
+      });
+      expect(component.selectionStart()).toBeNull();
+    });
+
+    it('completes a range selection via two taps on marked days', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Boska');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 't2', start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Boska' }),
+      );
+
+      const day1 = dayOfMonth(1);
+      const day2 = dayOfMonth(5);
+      if (!day1 || !day2) return;
+
+      component.onDayTouchStart(day1, { currentTarget: cellFor(day1) } as unknown as TouchEvent);
+      component.onDayClick(day1);
+      expect(component.selectionStart()).toEqual(day1.date);
+
+      component.onDayTouchStart(day2, { currentTarget: cellFor(day2) } as unknown as TouchEvent);
+      component.onDayClick(day2);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-01',
+        end: '2026-06-05',
+        color: 'green',
+        userName: 'Boska',
       });
       expect(component.selectionStart()).toBeNull();
     });
