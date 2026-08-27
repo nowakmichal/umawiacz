@@ -258,6 +258,10 @@ export class Calendar implements OnInit {
    * so that the selection flow doesn't start unintentionally.
    */
   onDayTouchStart(day: CalendarDay, event: TouchEvent): void {
+    // A new touch begins: drop any stale swallow left by a previous touch whose
+    // synthetic click never fired (e.g. the gesture became a scroll).
+    this.pendingClickSwallow = false;
+
     if (this.isErasing() || this.selectionStart()) return;
 
     if (this.tooltipDay()) {
@@ -368,11 +372,13 @@ export class Calendar implements OnInit {
     if (!isPlatformBrowser(this.platformId)) return;
     const cellRect = el.getBoundingClientRect();
     const shellRect = (this.elementRef.nativeElement as HTMLElement).getBoundingClientRect();
+    const half = 80; // keeps the tooltip (max-width 160px) inside the shell on narrow screens
     const x = cellRect.left - shellRect.left + cellRect.width / 2;
+    const clampedX = Math.min(Math.max(x, half), Math.max(shellRect.width - half, half));
     const above = cellRect.top > window.innerHeight * 0.55;
     const y = above ? cellRect.top - shellRect.top : cellRect.bottom - shellRect.top;
     this.tooltipAbove.set(above);
-    this.tooltipPos.set({ x, y });
+    this.tooltipPos.set({ x: clampedX, y });
     this.tooltipDay.set(day);
   }
 

@@ -94,7 +94,7 @@
       </div>
     }
 
-    <div class="cal-grid">
+    <div class="cal-grid" [class.selecting]="selectionStart()">
       <div class="weekday-row">
         @for (day of weekDays; track day) {
           <div class="weekday-cell">{{ day }}</div>

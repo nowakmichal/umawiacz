@@ -341,6 +341,120 @@ describe('Calendar', () => {
     });
   });
 
+  describe('touch flow', () => {
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
+
+    function cellFor(day: CalDay): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    it('does not swallow the click on an unmarked day, so a tap starts the selection', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      const day = dayOfMonth(6);
+      if (!day) return;
+
+      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      expect(component.tooltipDay()).toBeNull();
+
+      component.onDayClick(day);
+      expect(component.selectionStart()).toEqual(day.date);
+    });
+
+    it('shows the tooltip on a marked day and swallows the following click', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      expect(component.tooltipDay()).toBe(day);
+
+      component.onDayClick(day);
+      expect(component.selectionStart()).toBeNull();
+    });
+
+    it('hides an open tooltip on a tap elsewhere and swallows that click', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      const marked = dayOfMonth(1);
+      const other = dayOfMonth(6);
+      if (!marked || !other) return;
+
+      component.onDayTouchStart(marked, { currentTarget: cellFor(marked) } as unknown as TouchEvent);
+      expect(component.tooltipDay()).toBe(marked);
+
+      component.onDayTouchStart(other, { currentTarget: cellFor(other) } as unknown as TouchEvent);
+      expect(component.tooltipDay()).toBeNull();
+
+      component.onDayClick(other);
+      expect(component.selectionStart()).toBeNull();
+    });
+
+    it('completes a range selection via two taps, without hover', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 't1', start: '2026-06-06', end: '2026-06-07', color: 'green', userName: 'Ala' }),
+      );
+
+      const day1 = dayOfMonth(6);
+      const day2 = dayOfMonth(7);
+      if (!day1 || !day2) return;
+
+      component.onDayTouchStart(day1, { currentTarget: cellFor(day1) } as unknown as TouchEvent);
+      component.onDayClick(day1);
+      expect(component.selectionStart()).toEqual(day1.date);
+
+      component.onDayTouchStart(day2, { currentTarget: cellFor(day2) } as unknown as TouchEvent);
+      component.onDayClick(day2);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-07',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(component.selectionStart()).toBeNull();
+    });
+
+    it('keeps the selection active and skips the tooltip while selecting', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      const start = dayOfMonth(6);
+      const marked = dayOfMonth(1);
+      if (!start || !marked) return;
+
+      component.selectionStart.set(start.date);
+      component.onDayTouchStart(marked, { currentTarget: cellFor(marked) } as unknown as TouchEvent);
+
+      expect(component.tooltipDay()).toBeNull();
+      expect(component.selectionStart()).toEqual(start.date);
+    });
+
+    it('removes the own marking on tap while erasing, without showing the tooltip', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.deletePeriod.mockReturnValue(of(null));
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.isErasing.set(true);
+      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      expect(component.tooltipDay()).toBeNull();
+
+      component.onDayClick(day);
+
+      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
+      expect(component.periods().map((p) => p.id)).not.toContain('p1');
+    });
+  });
+
   describe('error banner', () => {
     it('should show and dismiss error', () => {
       component.errorMessage.set('Something went wrong');

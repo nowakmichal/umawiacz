@@ -46,3 +46,14 @@
     }
   }
 }
+
+@media (max-width: 600px) {
+  .login-container {
+    max-width: none;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 24px 16px;
+  }
+}
