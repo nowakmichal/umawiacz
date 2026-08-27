@@ -621,9 +621,9 @@
   touch-action: manipulation;
 }
 
-/* keep the grid stable while the user picks the range end day */
-.cal-grid.selecting .day-cell {
-  touch-action: none;
+/* vertical swipe = page scroll (browser takes over, aborted via touchcancel); horizontal drag = range selection */
+.cal-grid {
+  touch-action: pan-y;
 }
 
 /* ── Responsive — tablet ── */

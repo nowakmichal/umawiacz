@@ -28,7 +28,12 @@
     </div>
   }
 
-  <div class="calendar-shell">
+  <div
+    class="calendar-shell"
+    (mousemove)="onGridMouseMove($event)"
+    (mouseup)="onGridMouseUp($event)"
+    (mouseleave)="cancelPress()"
+  >
     <div class="cal-topbar">
       <a class="topbar-link" routerLink="/events">Moje wydarzenia</a>
       <div class="topbar-actions">
@@ -102,9 +107,9 @@
     <div
       class="cal-grid"
       [class.selecting]="selectionStart()"
-      (touchend)="cancelLongPress()"
-      (touchmove)="cancelLongPress()"
-      (touchcancel)="cancelLongPress()"
+      (touchmove)="onGridTouchMove($event)"
+      (touchend)="onGridTouchEnd($event)"
+      (touchcancel)="onGridTouchCancel($event)"
     >
       <div class="weekday-row">
         @for (day of weekDays; track day) {
@@ -124,7 +129,9 @@
               [class.tint-free]="day.ownColor === 'green'"
               [class.tint-busy]="day.ownColor === 'red'"
               [class.has-markings]="day.markings.length > 0"
+              [attr.data-date]="day.date.toISOString()"
               (click)="onDayClick(day)"
+              (mousedown)="onDayMouseDown(day, $event)"
               (mouseenter)="onDayMouseEnter(day, $event)"
               (mouseleave)="onDayMouseLeave()"
               (touchstart)="onDayTouchStart(day, $event)"

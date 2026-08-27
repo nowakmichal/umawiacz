@@ -634,6 +634,114 @@ describe('Calendar', () => {
     });
   });
 
+  describe('swipe range selection', () => {
+    let elementFromPoint: ReturnType<typeof vi.fn>;
+
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
+
+    function cellFor(day: CalDay): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    beforeEach(() => {
+      elementFromPoint = vi.fn();
+      Object.defineProperty(document, 'elementFromPoint', {
+        value: elementFromPoint,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      delete (document as unknown as Record<string, unknown>)['elementFromPoint'];
+    });
+
+    it('creates a period by swiping from day A to day B with touch', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 's1', start: '2026-06-06', end: '2026-06-08', color: 'green', userName: 'Ala' }),
+      );
+
+      const dayA = dayOfMonth(6);
+      const dayB = dayOfMonth(8);
+      if (!dayA || !dayB) return;
+
+      elementFromPoint.mockReturnValue(cellFor(dayB));
+
+      component.onDayTouchStart(dayA, { currentTarget: cellFor(dayA) } as unknown as TouchEvent);
+      component.onGridTouchMove(
+        { touches: [{ clientX: 60, clientY: 5 }], preventDefault: vi.fn() } as unknown as TouchEvent,
+      );
+      expect(component.selectionStart()).toEqual(dayA.date);
+
+      component.onGridTouchEnd({} as unknown as TouchEvent);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-08',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(component.selectionStart()).toBeNull();
+    });
+
+    it('creates a period by swiping from day A to day B with the mouse', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 's2', start: '2026-06-06', end: '2026-06-08', color: 'green', userName: 'Ala' }),
+      );
+
+      const dayA = dayOfMonth(6);
+      const dayB = dayOfMonth(8);
+      if (!dayA || !dayB) return;
+
+      elementFromPoint.mockReturnValue(cellFor(dayB));
+
+      component.onDayMouseDown(
+        dayA,
+        { clientX: 100, clientY: 100, preventDefault: vi.fn() } as unknown as MouseEvent,
+      );
+      component.onGridMouseMove({ clientX: 160, clientY: 100 } as unknown as MouseEvent);
+      component.onGridMouseUp({} as unknown as MouseEvent);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-08',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(component.selectionStart()).toBeNull();
+    });
+
+    it('does not start a selection or create a period when the touch stays within the jitter threshold', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      const dayA = dayOfMonth(6);
+      if (!dayA) return;
+
+      elementFromPoint.mockReturnValue(null);
+
+      component.onDayTouchStart(dayA, { currentTarget: cellFor(dayA) } as unknown as TouchEvent);
+      component.onGridTouchMove(
+        { touches: [{ clientX: 5, clientY: 2 }], preventDefault: vi.fn() } as unknown as TouchEvent,
+      );
+      expect(component.selectionStart()).toBeNull();
+
+      component.onGridTouchEnd({} as unknown as TouchEvent);
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+    });
+  });
+
   describe('error banner', () => {
     it('should show and dismiss error', () => {
       component.errorMessage.set('Something went wrong');
