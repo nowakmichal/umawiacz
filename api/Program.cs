@@ -131,8 +131,8 @@ app.MapPost("/api/events/{id}/periods", async (string id, CreateTimePeriodReques
         db.Users.Add(user);
     }
 
-    if (req.Color is not ("green" or "orange" or "red"))
-        return Results.BadRequest(new { error = "Color must be 'green', 'orange', or 'red'." });
+    if (req.Color is not ("green" or "red"))
+        return Results.BadRequest(new { error = "Color must be 'green' or 'red'." });
 
     if (!DateOnly.TryParse(req.Start, out _) || !DateOnly.TryParse(req.End, out _))
         return Results.BadRequest(new { error = "Start and End must be valid dates (YYYY-MM-DD)." });

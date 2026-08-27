@@ -1,6 +1,6 @@
 import { User } from './login.model';
 
-export type SelectionColor = 'green' | 'orange' | 'red';
+export type SelectionColor = 'green' | 'red';
 
 export interface ColorOption {
   value: SelectionColor;
@@ -9,9 +9,8 @@ export interface ColorOption {
 }
 
 export const SELECTION_COLORS: ColorOption[] = [
-  { value: 'green', label: 'Zielony', hex: '#22c55e' },
-  { value: 'orange', label: 'Pomarańczowy', hex: '#f97316' },
-  { value: 'red', label: 'Czerwony', hex: '#ef4444' },
+  { value: 'green', label: 'Wolny', hex: '#22c55e' },
+  { value: 'red', label: 'Zajęty', hex: '#ef4444' },
 ];
 
 export interface Period {

@@ -57,7 +57,7 @@ describe('Calendar', () => {
 
   const mockPeriods: Period[] = [
     { id: 'p1', eventId: EVENT_ID, start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Ala' },
-    { id: 'p2', eventId: EVENT_ID, start: '2026-06-10', end: '2026-06-12', color: 'orange', userName: 'Ola' },
+    { id: 'p2', eventId: EVENT_ID, start: '2026-06-10', end: '2026-06-12', color: 'red', userName: 'Ola' },
   ];
 
   beforeEach(async () => {
@@ -205,7 +205,7 @@ describe('Calendar', () => {
       component.toggleEraseMode();
       expect(component.isErasing()).toBe(true);
 
-      component.selectColor('orange');
+      component.selectColor('green');
       expect(component.isErasing()).toBe(false);
     });
   });

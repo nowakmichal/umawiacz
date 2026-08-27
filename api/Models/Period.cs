@@ -7,7 +7,7 @@ public class Period
     public string UserId { get; set; } = string.Empty;
     public string Start { get; set; } = string.Empty;   // YYYY-MM-DD
     public string End { get; set; } = string.Empty;     // YYYY-MM-DD
-    public string Color { get; set; } = string.Empty;   // green | orange | red
+    public string Color { get; set; } = string.Empty;   // green | red
     public Event Event { get; set; } = null!;
     public User User { get; set; } = null!;
 

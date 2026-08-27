@@ -43,7 +43,7 @@ Base: `http://localhost:5000`
 | DELETE | `/api/periods/{id}`| —                                     | 404 if missing                         |
 | POST   | `/api/login`       | `{ username, password }`              | hardcoded `test` / `test` (demo)       |
 
-`color` is one of `green | orange | red`; `start`/`end` are `YYYY-MM-DD`.
+`color` is one of `green | red`; `start`/`end` are `YYYY-MM-DD`.
 
 ## Scripts
 
