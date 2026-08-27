@@ -270,16 +270,33 @@
 }
 
 .user-chip {
-  font-size: 0.78rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: #2563eb;
   background: #eff6ff;
-  border-radius: 20px;
-  padding: 2px 10px;
+  border-radius: 999px;
+  padding: 6px 16px;
   white-space: nowrap;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.logout-btn {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2563eb;
+  background: transparent;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 7px 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #eff6ff;
+  }
 }
 
 /* ── Color toolbar ── */

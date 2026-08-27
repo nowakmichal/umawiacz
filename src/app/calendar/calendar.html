@@ -39,6 +39,10 @@
     @if (eventInfo(); as e) {
       <div class="event-header">
         <h1 class="event-name">{{ e.name }}</h1>
+        @if (currentUser()) {
+          <span class="user-chip">{{ currentUser() }}</span>
+          <button class="logout-btn" (click)="logout()" aria-label="Wyloguj">Wyloguj</button>
+        }
         <span class="event-dates">{{ eventDateLabel() }}</span>
         @if (e.description) {
           <p class="event-desc">{{ e.description }}</p>
@@ -52,10 +56,6 @@
         <span class="month-label">{{ monthLabel() }}</span>
         <div class="header-meta">
           <button class="today-btn" (click)="goToToday()">Dziś</button>
-          @if (currentUser()) {
-            <span class="user-chip">{{ currentUser() }}</span>
-            <button class="logout-btn" (click)="logout()" aria-label="Wyloguj">Wyloguj</button>
-          }
         </div>
       </div>
       <button class="nav-btn" (click)="nextMonth()" aria-label="Następny miesiąc">&#8250;</button>
