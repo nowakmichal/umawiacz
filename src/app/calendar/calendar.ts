@@ -33,6 +33,7 @@ interface CalendarDay {
   isToday: boolean;
   markings: DayMarking[];
   isSelecting: boolean;
+  ownColor: SelectionColor | null;
 }
 
 const POLL_INTERVAL_MS = 15_000;
@@ -108,6 +109,7 @@ export class Calendar implements OnInit {
     const activePeriods = this.periods();
     const start = this.selectionStart();
     const hover = this.hoverDate();
+    const user = this.currentUser()?.trim().toLowerCase() || null;
 
     const colorMap = new Map(SELECTION_COLORS.map((c) => [c.value, c.hex]));
     const labelMap = new Map(SELECTION_COLORS.map((c) => [c.value, c.label]));
@@ -128,6 +130,10 @@ export class Calendar implements OnInit {
         color: colorMap.get(p.color) ?? '#000',
         colorLabel: labelMap.get(p.color) ?? p.color,
       }));
+      const ownPeriod = user
+        ? matchingPeriods.find((p) => p.userName.trim().toLowerCase() === user)
+        : undefined;
+      const ownColor = ownPeriod ? ownPeriod.color : null;
 
       let isSelecting = false;
       if (start) {
@@ -143,6 +149,7 @@ export class Calendar implements OnInit {
         isToday: this.isSameDay(date, this.today),
         markings,
         isSelecting,
+        ownColor,
       });
       cursor.setDate(cursor.getDate() + 1);
     }

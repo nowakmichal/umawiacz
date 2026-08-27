@@ -54,11 +54,11 @@ Viewport meta already exists in `src/index.html` — no change needed. Target wi
 
 Today: marks are thin 4px bands (3px on mobile) at the bottom of each day cell, one band per user; the `.has-markings` class is applied but unstyled; toolbar swatches have no visible label. Goal: at-a-glance readability. No data/API changes (colors stay `green`/`red`, storage unchanged).
 
-- [ ] **4.1 Bolder bands** — in `src/app/calendar/calendar.scss`: `.period-band` height 4px → 6px (and 3px → 5px in the 600px block), `.markings-row` padding-bottom 3px → 5px. One band per user stays as-is.
+- [x] **4.1 Bolder bands** — in `src/app/calendar/calendar.scss`: `.period-band` height 4px → 6px (and 3px → 5px in the 600px block), `.markings-row` padding-bottom 3px → 5px. One band per user stays as-is.
   - Verify: `npm run build` passes; visual check — bands clearly visible at a glance.
-- [ ] **4.2 Tint day cells by the viewer's own marking** — in `calendar.ts`: add `ownColor: SelectionColor | null` to `CalendarDay`, derived from the `currentUser()` marking on that day (at most one per user per day — server rejects overlaps); in `calendar.html`: `[class.tint-free]="day.ownColor === 'green'"`, `[class.tint-busy]="day.ownColor === 'red'"`; in `calendar.scss`: light tints (e.g. `#f0fdf4` / `#fef2f2`), keeping `.selecting`/`.selection-start` and `.today` visually dominant over the tint.
+- [x] **4.2 Tint day cells by the viewer's own marking** — in `calendar.ts`: add `ownColor: SelectionColor | null` to `CalendarDay`, derived from the `currentUser()` marking on that day (at most one per user per day — server rejects overlaps); in `calendar.html`: `[class.tint-free]="day.ownColor === 'green'"`, `[class.tint-busy]="day.ownColor === 'red'"`; in `calendar.scss`: light tints (e.g. `#f0fdf4` / `#fef2f2`), keeping `.selecting`/`.selection-start` and `.today` visually dominant over the tint.
   - Verify: `npm test -- --watch=false` green (extend `calendar.spec.ts` for the new classes), `npm run build` passes; visual — the viewer's free/busy days are clearly tinted while other users' marks remain bands.
-- [ ] **4.3 Visible color legend in the toolbar** — in `calendar.html` + `calendar.scss`: render each swatch with its visible label beside it (dot + `SELECTION_COLORS` label: Wolny/Zajęty); keep click-to-select, the `.active` state, and the erase button unchanged.
+- [x] **4.3 Visible color legend in the toolbar** — in `calendar.html` + `calendar.scss`: render each swatch with its visible label beside it (dot + `SELECTION_COLORS` label: Wolny/Zajęty); keep click-to-select, the `.active` state, and the erase button unchanged.
   - Verify: `npm test -- --watch=false` green, `npm run build` passes; visual — both colors labeled in the toolbar.
 
 **Task verification:** `npm test -- --watch=false` green + `npm run build` passes + visual pass at desktop and 390px: own marks tinted, bands prominent, legend readable.

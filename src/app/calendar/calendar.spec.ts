@@ -210,6 +210,46 @@ describe('Calendar', () => {
     });
   });
 
+  describe('color legend', () => {
+    function toolbarSwatches(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.color-toolbar .color-swatch'));
+    }
+
+    function hexToRgb(hex: string): string {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+    }
+
+    it('shows a dot and a visible label for each selection color', () => {
+      const swatches = toolbarSwatches();
+      expect(swatches.length).toBe(SELECTION_COLORS.length);
+
+      const labels = swatches.map(
+        (s) => (s.querySelector('.swatch-label') as HTMLElement).textContent?.trim(),
+      );
+      expect(labels).toEqual(['Wolny', 'Zajęty']);
+
+      swatches.forEach((s, i) => {
+        const dot = s.querySelector('.swatch-dot') as HTMLElement;
+        expect(dot.style.backgroundColor).toBe(hexToRgb(SELECTION_COLORS[i].hex));
+      });
+    });
+
+    it('marks the selected color active in the toolbar', () => {
+      component.selectColor('red');
+      const swatches = toolbarSwatches();
+      expect(swatches[0].classList.contains('active')).toBe(false);
+      expect(swatches[1].classList.contains('active')).toBe(true);
+    });
+
+    it('clears the active swatch when entering erase mode', () => {
+      component.toggleEraseMode();
+      const swatches = toolbarSwatches();
+      expect(swatches.every((s) => !s.classList.contains('active'))).toBe(true);
+    });
+  });
+
   describe('erase mode', () => {
     it('should toggle erase mode on and off', () => {
       expect(component.isErasing()).toBe(false);
@@ -295,13 +335,27 @@ describe('Calendar', () => {
     it('should return true for the selection start day', () => {
       const date = new Date(2026, 5, 15);
       component.selectionStart.set(date);
-      const day = { date, inCurrentMonth: true, isToday: false, markings: [], isSelecting: false };
+      const day = {
+        date,
+        inCurrentMonth: true,
+        isToday: false,
+        markings: [],
+        isSelecting: false,
+        ownColor: null,
+      };
       expect(component.isSelectionStart(day)).toBe(true);
     });
 
     it('should return false for other days', () => {
       component.selectionStart.set(new Date(2026, 5, 15));
-      const day = { date: new Date(2026, 5, 16), inCurrentMonth: true, isToday: false, markings: [], isSelecting: false };
+      const day = {
+        date: new Date(2026, 5, 16),
+        inCurrentMonth: true,
+        isToday: false,
+        markings: [],
+        isSelecting: false,
+        ownColor: null,
+      };
       expect(component.isSelectionStart(day)).toBe(false);
     });
   });
@@ -318,6 +372,69 @@ describe('Calendar', () => {
       const allDays = component.weeks().flat();
       const marked = allDays.filter((d) => d.markings.length > 0);
       expect(marked.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('own marking tint', () => {
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    function cellFor(day: NonNullable<ReturnType<typeof dayOfMonth>>): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    it('tints the days the current user marked free with tint-free', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      fixture.detectChanges();
+
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      expect(day.ownColor).toBe('green');
+      expect(cellFor(day).classList.contains('tint-free')).toBe(true);
+      expect(cellFor(day).classList.contains('tint-busy')).toBe(false);
+    });
+
+    it('tints the days the current user marked busy with tint-busy', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ola');
+      fixture.detectChanges();
+
+      const day = dayOfMonth(11);
+      if (!day) return;
+
+      expect(day.ownColor).toBe('red');
+      expect(cellFor(day).classList.contains('tint-busy')).toBe(true);
+      expect(cellFor(day).classList.contains('tint-free')).toBe(false);
+    });
+
+    it('does not tint days marked only by other users', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      fixture.detectChanges();
+
+      const day = dayOfMonth(10);
+      if (!day) return;
+
+      expect(day.ownColor).toBeNull();
+      expect(cellFor(day).classList.contains('tint-free')).toBe(false);
+      expect(cellFor(day).classList.contains('tint-busy')).toBe(false);
+    });
+
+    it('tints no day for a guest without a current user', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      fixture.detectChanges();
+
+      expect(component.weeks().flat().every((d) => d.ownColor === null)).toBe(true);
+      expect(fixture.nativeElement.querySelector('.tint-free')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.tint-busy')).toBeNull();
     });
   });
 

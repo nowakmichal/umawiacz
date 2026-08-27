@@ -314,18 +314,35 @@
 }
 
 .color-swatch {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 999px;
+  border: 2px solid #e5e7eb;
+  background: #ffffff;
   cursor: pointer;
-  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
   transition: border-color 0.15s, transform 0.1s;
   flex-shrink: 0;
 
+  .swatch-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .swatch-label {
+    white-space: nowrap;
+  }
+
   &.active {
     border-color: #111827;
-    transform: scale(1.15);
+    background: #f3f4f6;
+    transform: scale(1.05);
   }
 
   &:hover:not(.active) {
@@ -467,6 +484,14 @@
     background: #f9fafb;
   }
 
+  &.tint-free {
+    background: #f0fdf4;
+  }
+
+  &.tint-busy {
+    background: #fef2f2;
+  }
+
   &.other-month .day-number {
     color: #d1d5db;
   }
@@ -505,12 +530,12 @@
   width: calc(100% - 4px);
   min-width: 0;
   margin-top: auto;
-  padding-bottom: 3px;
+  padding-bottom: 5px;
 }
 
 .period-band {
   flex: 1;
-  height: 4px;
+  height: 6px;
   border-radius: 2px;
   min-width: 0;
 }
@@ -636,7 +661,7 @@
   }
 
   .period-band {
-    height: 3px;
+    height: 5px;
   }
 
   .color-toolbar {
@@ -644,7 +669,11 @@
     padding-bottom: 12px;
   }
 
-  .color-swatch,
+  .color-swatch {
+    min-height: 44px;
+    padding: 8px 14px 8px 10px;
+  }
+
   .erase-btn {
     width: 44px;
     height: 44px;
@@ -683,6 +712,12 @@
 @media (max-width: 380px) {
   .calendar-shell {
     padding: 10px 6px;
+  }
+
+  .color-swatch {
+    padding: 6px 10px 6px 8px;
+    font-size: 0.78rem;
+    gap: 6px;
   }
 
   .user-chip {

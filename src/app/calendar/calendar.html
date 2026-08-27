@@ -66,10 +66,12 @@
         <button
           class="color-swatch"
           [class.active]="!isErasing() && selectedColor() === c.value"
-          [style.background]="c.hex"
           (click)="selectColor(c.value)"
           [attr.aria-label]="c.label"
-        ></button>
+        >
+          <span class="swatch-dot" [style.background]="c.hex"></span>
+          <span class="swatch-label">{{ c.label }}</span>
+        </button>
       }
       <button
         class="erase-btn"
@@ -110,6 +112,8 @@
               [class.today]="day.isToday"
               [class.selecting]="day.isSelecting"
               [class.selection-start]="isSelectionStart(day)"
+              [class.tint-free]="day.ownColor === 'green'"
+              [class.tint-busy]="day.ownColor === 'red'"
               [class.has-markings]="day.markings.length > 0"
               (click)="onDayClick(day)"
               (mouseenter)="onDayMouseEnter(day, $event)"
