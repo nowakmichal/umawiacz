@@ -582,6 +582,29 @@ describe('Calendar', () => {
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.error-banner')).toBeFalsy();
     });
+
+    it('should render a close button when the error is shown and hide the banner when clicked', () => {
+      component.errorMessage.set('Something went wrong');
+      fixture.detectChanges();
+      const close = fixture.nativeElement.querySelector('.error-close') as HTMLButtonElement;
+      expect(close).toBeTruthy();
+
+      close.click();
+      fixture.detectChanges();
+      expect(component.errorMessage()).toBeNull();
+      expect(fixture.nativeElement.querySelector('.error-banner')).toBeFalsy();
+    });
+
+    it('should not render the close button when there is no error', () => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.error-close')).toBeFalsy();
+    });
+
+    it('clearError should clear the error signal', () => {
+      component.errorMessage.set('Something went wrong');
+      component.clearError();
+      expect(component.errorMessage()).toBeNull();
+    });
   });
 
   describe('copyLink', () => {

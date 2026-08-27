@@ -360,6 +360,10 @@ export class Calendar implements OnInit {
       });
   }
 
+  clearError(): void {
+    this.errorMessage.set(null);
+  }
+
   cancelSelection(): void {
     this.selectionStart.set(null);
     this.hoverDate.set(null);

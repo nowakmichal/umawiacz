@@ -95,6 +95,7 @@
     @if (errorMessage()) {
       <div class="error-banner" role="alert">
         <span>{{ errorMessage() }}</span>
+        <button class="error-close" type="button" aria-label="Zamknij" (click)="clearError()">✕</button>
       </div>
     }
 
