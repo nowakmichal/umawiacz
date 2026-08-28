@@ -88,6 +88,22 @@
       >
         ✕
       </button>
+      <div class="mode-toggle">
+        <button
+          class="mode-btn"
+          [class.active]="selectionMode() === 'range'"
+          (click)="setSelectionMode('range')"
+        >
+          Zakres
+        </button>
+        <button
+          class="mode-btn"
+          [class.active]="selectionMode() === 'single'"
+          (click)="setSelectionMode('single')"
+        >
+          Dzień
+        </button>
+      </div>
       <div class="toolbar-row2">
         @if (selectionStart()) {
           <span class="toolbar-hint">Wybierz datę końcową</span>

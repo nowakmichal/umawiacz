@@ -327,11 +327,10 @@
   display: contents;
 }
 
-.color-swatch {
+.color-swatch,
+.mode-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 12px 4px 8px;
   border-radius: 999px;
   border: 2px solid #e5e7eb;
   background: #ffffff;
@@ -339,19 +338,9 @@
   font-size: 0.82rem;
   font-weight: 600;
   color: #374151;
+  white-space: nowrap;
   transition: border-color 0.15s, transform 0.1s;
   flex-shrink: 0;
-
-  .swatch-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .swatch-label {
-    white-space: nowrap;
-  }
 
   &.active {
     border-color: #111827;
@@ -362,6 +351,22 @@
   &:hover:not(.active) {
     border-color: #6b7280;
   }
+}
+
+.color-swatch {
+  gap: 7px;
+  padding: 4px 12px 4px 8px;
+
+  .swatch-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+}
+
+.mode-btn {
+  padding: 4px 10px;
 }
 
 .erase-btn {
@@ -389,6 +394,12 @@
   &:hover:not(.active) {
     border-color: #6b7280;
   }
+}
+
+.mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .toolbar-hint {
@@ -451,11 +462,15 @@
   overflow: hidden;
 }
 
-.weekday-row {
+.weekday-row,
+.week-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  background: #f3f4f6;
   border-bottom: 1px solid #e5e7eb;
+}
+
+.weekday-row {
+  background: #f3f4f6;
 }
 
 .weekday-cell {
@@ -469,10 +484,6 @@
 }
 
 .week-row {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-bottom: 1px solid #e5e7eb;
-
   &:last-child {
     border-bottom: none;
   }
@@ -703,17 +714,17 @@
     height: 44px;
   }
 
+  .mode-btn {
+    min-height: 44px;
+  }
+
   .today-btn,
   .cancel-btn,
   .copy-link-btn,
   .logout-btn,
-  .topbar-link {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .user-chip {
+  .topbar-link,
+  .user-chip,
+  .error-close {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -755,9 +766,6 @@
   }
 
   .error-close {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
     justify-content: center;
     padding: 0 4px;
   }
@@ -770,10 +778,18 @@
       calc(10px + env(safe-area-inset-bottom, 0px)) calc(6px + env(safe-area-inset-left, 0px));
   }
 
-  .color-swatch {
-    padding: 6px 10px 6px 8px;
+  .color-toolbar {
+    gap: 5px;
+  }
+
+  .color-swatch,
+  .mode-btn {
+    padding: 6px 8px;
     font-size: 0.78rem;
-    gap: 6px;
+  }
+
+  .color-swatch {
+    gap: 5px;
   }
 
   .user-chip {

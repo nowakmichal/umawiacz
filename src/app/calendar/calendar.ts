@@ -44,6 +44,8 @@ const USERNAME_KEY = 'umawiacz_username';
 const EVENT_NOT_FOUND_MSG = 'Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.';
 const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj ponownie.';
 
+export type SelectionMode = 'range' | 'single';
+
 @Component({
   selector: 'app-calendar',
   imports: [CommonModule, RouterLink],
@@ -83,6 +85,7 @@ export class Calendar implements OnInit, OnDestroy {
 
   readonly viewDate = signal(new Date(this.today.getFullYear(), this.today.getMonth(), 1));
   readonly selectedColor = signal<SelectionColor>('green');
+  readonly selectionMode = signal<SelectionMode>('range');
   readonly isErasing = signal(false);
   readonly selectionStart = signal<Date | null>(null);
   readonly hoverDate = signal<Date | null>(null);
@@ -267,6 +270,15 @@ export class Calendar implements OnInit, OnDestroy {
     }
   }
 
+  setSelectionMode(mode: SelectionMode): void {
+    this.selectionMode.set(mode);
+    this.selectionStart.set(null);
+    this.hoverDate.set(null);
+    this.cancelLongPress();
+    this.resetSwipeState();
+    this.cancelPress();
+  }
+
   onDayMouseEnter(day: CalendarDay, event: MouseEvent): void {
     if (this.selectionStart()) {
       this.hoverDate.set(day.date);
@@ -287,6 +299,8 @@ export class Calendar implements OnInit, OnDestroy {
 
     // Prevent text selection while dragging; the synthetic click still fires.
     event.preventDefault();
+
+    if (this.selectionMode() === 'single') return;
 
     this.pressStartedFresh = this.selectionStart() === null;
     if (!this.selectionStart()) {
@@ -322,6 +336,13 @@ export class Calendar implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.selectionMode() === 'single') {
+      if (day.markings.length) {
+        this.startLongPress(day, event.currentTarget as HTMLElement);
+      }
+      return;
+    }
+
     const t = event.touches?.[0];
     this.swipeAnchor = day.date;
     this.swipeStartX = t?.clientX ?? 0;
@@ -351,6 +372,8 @@ export class Calendar implements OnInit, OnDestroy {
 
   onGridTouchMove(event: TouchEvent): void {
     this.cancelLongPress();
+
+    if (this.selectionMode() === 'single') return;
 
     const anchor = this.swipeAnchor;
     if (anchor === null) return;
@@ -383,7 +406,7 @@ export class Calendar implements OnInit, OnDestroy {
     this.cancelLongPress();
 
     if (this.swipeAnchor !== null && this.swipeMoved) {
-      this.confirmSelection(this.hoverDate() ?? this.swipeAnchor);
+      this.confirmSelection(this.swipeAnchor, this.hoverDate() ?? this.swipeAnchor);
       this.pendingClickSwallow = true;
     }
 
@@ -416,6 +439,7 @@ export class Calendar implements OnInit, OnDestroy {
   }
 
   onGridMouseMove(event: MouseEvent): void {
+    if (this.selectionMode() === 'single') return;
     if (this.pressAnchor === null) return;
 
     if (
@@ -438,7 +462,7 @@ export class Calendar implements OnInit, OnDestroy {
 
   onGridMouseUp(event: MouseEvent): void {
     if (this.pressAnchor !== null && this.pressMoved) {
-      this.confirmSelection(this.hoverDate() ?? this.pressAnchor);
+      this.confirmSelection(this.pressAnchor, this.hoverDate() ?? this.pressAnchor);
       this.pendingClickSwallow = true;
     }
     if (this.pressAnchor !== null && !this.pressMoved && this.pressStartedFresh) {
@@ -472,19 +496,23 @@ export class Calendar implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.selectionMode() === 'single') {
+      this.confirmSelection(day.date, day.date);
+      return;
+    }
+
     const start = this.selectionStart();
     if (!start) {
       this.selectionStart.set(day.date);
       return;
     }
 
-    this.confirmSelection(day.date);
+    this.confirmSelection(start, day.date);
   }
 
-  private confirmSelection(end: Date): void {
+  private confirmSelection(start: Date, end: Date): void {
     const user = this.currentUser();
-    const start = this.selectionStart();
-    if (!user || !start) return;
+    if (!user) return;
 
     const lo = start <= end ? start : end;
     const hi = start <= end ? end : start;

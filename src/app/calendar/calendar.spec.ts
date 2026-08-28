@@ -742,6 +742,117 @@ describe('Calendar', () => {
     });
   });
 
+  describe('single-day mode', () => {
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
+
+    function cellFor(day: CalDay): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    it('creates a one-day period on a single click', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.setSelectionMode('single');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 'sd1', start: '2026-06-15', end: '2026-06-15', color: 'green', userName: 'Ala' }),
+      );
+
+      const day = dayOfMonth(15);
+      if (!day) return;
+
+      component.onDayClick(day);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-15',
+        end: '2026-06-15',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(component.selectionStart()).toBeNull();
+      expect(component.periods().length).toBe(3);
+    });
+
+    it('shows the conflict error when tapping an already marked day', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.setSelectionMode('single');
+      periodService.createPeriod.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 409 })),
+      );
+
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayClick(day);
+
+      expect(component.errorMessage()).toBe('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
+      expect(component.periods().length).toBe(2);
+    });
+
+    it('clears the selection state when switching modes', () => {
+      component.selectionStart.set(new Date(2026, 5, 15));
+      component.hoverDate.set(new Date(2026, 5, 16));
+
+      component.setSelectionMode('single');
+      expect(component.selectionMode()).toBe('single');
+      expect(component.selectionStart()).toBeNull();
+      expect(component.hoverDate()).toBeNull();
+
+      component.setSelectionMode('range');
+      expect(component.selectionMode()).toBe('range');
+      expect(component.selectionStart()).toBeNull();
+      expect(component.hoverDate()).toBeNull();
+    });
+
+    it('does not start a touch swipe in single mode', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.setSelectionMode('single');
+
+      const day = dayOfMonth(6);
+      if (!day) return;
+
+      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
+      component.onGridTouchMove(
+        { touches: [{ clientX: 60, clientY: 5 }], preventDefault: vi.fn() } as unknown as TouchEvent,
+      );
+      component.onGridTouchEnd({} as unknown as TouchEvent);
+
+      expect(component.selectionStart()).toBeNull();
+      expect(component.hoverDate()).toBeNull();
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+    });
+
+    it('does not start a mouse press in single mode', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.setSelectionMode('single');
+
+      const day = dayOfMonth(6);
+      if (!day) return;
+
+      component.onDayMouseDown(
+        day,
+        { clientX: 100, clientY: 100, preventDefault: vi.fn() } as unknown as MouseEvent,
+      );
+      component.onGridMouseMove({ clientX: 160, clientY: 100 } as unknown as MouseEvent);
+      component.onGridMouseUp({} as unknown as MouseEvent);
+
+      expect(component.selectionStart()).toBeNull();
+      expect(component.hoverDate()).toBeNull();
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+    });
+  });
+
   describe('error banner', () => {
     it('should show and dismiss error', () => {
       component.errorMessage.set('Something went wrong');
