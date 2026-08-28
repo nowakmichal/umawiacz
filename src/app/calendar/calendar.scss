@@ -322,6 +322,11 @@
   flex-wrap: wrap;
 }
 
+/* on desktop the hint/cancel row dissolves back into the toolbar's flex flow */
+.toolbar-row2 {
+  display: contents;
+}
+
 .color-swatch {
   display: inline-flex;
   align-items: center;
@@ -675,8 +680,17 @@
   }
 
   .color-toolbar {
+    min-height: calc(44px + 6px + 44px);
     gap: 6px;
     padding-bottom: 12px;
+  }
+
+  .toolbar-row2 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 44px;
   }
 
   .color-swatch {
@@ -725,6 +739,7 @@
 
   .toolbar-hint {
     font-size: 0.72rem;
+    white-space: nowrap;
   }
 
   .user-modal {
