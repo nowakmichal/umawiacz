@@ -438,6 +438,63 @@ describe('Calendar', () => {
     });
   });
 
+  describe('own band', () => {
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    function cellFor(day: NonNullable<ReturnType<typeof dayOfMonth>>): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    it('flags only the current user band with the own class', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.periods.update((list) => [
+        ...list,
+        {
+          id: 'p3',
+          eventId: EVENT_ID,
+          start: '2026-06-01',
+          end: '2026-06-03',
+          color: 'red',
+          userName: 'Ola',
+        },
+      ]);
+      component.currentUser.set('ala');
+      fixture.detectChanges();
+
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      expect(day.markings.filter((m) => m.own).length).toBe(1);
+      expect(day.markings.find((m) => m.periodId === 'p1')?.own).toBe(true);
+      expect(day.markings.find((m) => m.periodId === 'p3')?.own).toBe(false);
+
+      const bands = cellFor(day).querySelectorAll('.period-band');
+      expect(bands.length).toBe(day.markings.length);
+      bands.forEach((band, i) => {
+        expect(band.classList.contains('own')).toBe(day.markings[i].own);
+      });
+    });
+
+    it('marks no band as own when there is no current user', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      fixture.detectChanges();
+
+      const bands = fixture.nativeElement.querySelectorAll('.period-band');
+      expect(bands.length).toBeGreaterThan(0);
+      expect(fixture.nativeElement.querySelector('.period-band.own')).toBeNull();
+      expect(component.weeks().flat().every((d) => d.markings.every((m) => m.own === false))).toBe(
+        true,
+      );
+    });
+  });
+
   describe('tooltip', () => {
     it('should show tooltip on mouse enter over a marked day', () => {
       component.viewDate.set(new Date(2026, 5, 1));

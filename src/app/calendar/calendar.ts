@@ -26,6 +26,7 @@ interface DayMarking {
   userName: string;
   color: string; // hex
   colorLabel: string;
+  own: boolean;
 }
 
 interface CalendarDay {
@@ -149,6 +150,7 @@ export class Calendar implements OnInit, OnDestroy {
         userName: p.userName,
         color: colorMap.get(p.color) ?? '#000',
         colorLabel: labelMap.get(p.color) ?? p.color,
+        own: user ? p.userName.trim().toLowerCase() === user : false,
       }));
       const ownPeriod = user
         ? matchingPeriods.find((p) => p.userName.trim().toLowerCase() === user)

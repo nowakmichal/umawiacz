@@ -565,6 +565,11 @@
   min-width: 0;
 }
 
+.period-band.own {
+  height: 7px;
+  box-shadow: 0 0 0 1.5px rgba(17, 24, 39, 0.85);
+}
+
 /* ── Tooltip ── */
 .day-tooltip {
   position: absolute;
@@ -688,6 +693,10 @@
 
   .period-band {
     height: 5px;
+  }
+
+  .period-band.own {
+    height: 6px;
   }
 
   .color-toolbar {
