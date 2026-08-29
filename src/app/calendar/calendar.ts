@@ -69,7 +69,6 @@ export class Calendar implements OnInit, OnDestroy {
 
   readonly viewDate = signal(new Date(this.today.getFullYear(), this.today.getMonth(), 1));
   readonly selectedColor = signal<SelectionColor>('green');
-  readonly isErasing = signal(false);
   readonly periods = signal<Period[]>([]);
   readonly isSaving = signal(false);
 
@@ -227,15 +226,10 @@ export class Calendar implements OnInit, OnDestroy {
 
   selectColor(color: SelectionColor): void {
     this.selectedColor.set(color);
-    this.isErasing.set(false);
-  }
-
-  toggleEraseMode(): void {
-    this.isErasing.set(!this.isErasing());
   }
 
   onDayMouseEnter(day: CalendarDay, event: MouseEvent): void {
-    if (day.markings.length && !this.isErasing()) {
+    if (day.markings.length) {
       this.positionTooltip(day, event.currentTarget as HTMLElement);
     }
   }
@@ -245,8 +239,6 @@ export class Calendar implements OnInit, OnDestroy {
   }
 
   onDayMouseDown(day: CalendarDay, event: MouseEvent): void {
-    if (this.isErasing()) return;
-
     // Prevent text selection while pressing; the synthetic click still fires.
     event.preventDefault();
   }
@@ -261,8 +253,6 @@ export class Calendar implements OnInit, OnDestroy {
     // A new touch begins: drop any stale swallow left by a previous touch whose
     // synthetic click never fired (e.g. the gesture became a scroll).
     this.pendingClickSwallow = false;
-
-    if (this.isErasing()) return;
 
     if (this.tooltipDay()) {
       // Dismiss tooltip; swallow the click so we don't create a marking
@@ -299,11 +289,12 @@ export class Calendar implements OnInit, OnDestroy {
 
     this.tooltipDay.set(null);
 
-    if (this.isErasing()) {
-      const user = this.currentUser();
-      const ownMarking = day.markings.find((m) => m.userName === user);
-      if (ownMarking) this.removeMarking(ownMarking.periodId);
-      return;
+    const ownMarking = day.markings.find((m) => m.own);
+    if (ownMarking && day.ownColor) {
+      this.removeMarking(ownMarking.periodId);
+      if (day.ownColor === this.selectedColor()) {
+        return;
+      }
     }
 
     this.confirmSelection(day.date);

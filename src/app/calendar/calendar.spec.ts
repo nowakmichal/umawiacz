@@ -198,15 +198,6 @@ describe('Calendar', () => {
     it('should select a color', () => {
       component.selectColor('red');
       expect(component.selectedColor()).toBe('red');
-      expect(component.isErasing()).toBe(false);
-    });
-
-    it('should deselect erase mode when selecting color', () => {
-      component.toggleEraseMode();
-      expect(component.isErasing()).toBe(true);
-
-      component.selectColor('green');
-      expect(component.isErasing()).toBe(false);
     });
   });
 
@@ -243,21 +234,6 @@ describe('Calendar', () => {
       expect(swatches[1].classList.contains('active')).toBe(true);
     });
 
-    it('clears the active swatch when entering erase mode', () => {
-      component.toggleEraseMode();
-      const swatches = toolbarSwatches();
-      expect(swatches.every((s) => !s.classList.contains('active'))).toBe(true);
-    });
-  });
-
-  describe('erase mode', () => {
-    it('should toggle erase mode on and off', () => {
-      expect(component.isErasing()).toBe(false);
-      component.toggleEraseMode();
-      expect(component.isErasing()).toBe(true);
-      component.toggleEraseMode();
-      expect(component.isErasing()).toBe(false);
-    });
   });
 
   describe('selection flow', () => {
@@ -505,9 +481,9 @@ describe('Calendar', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
       periodService.createPeriod.mockReturnValue(
-        of({ id: 't4', start: '2026-06-01', end: '2026-06-01', color: 'green', userName: 'Ala' }),
+        of({ id: 't4', start: '2026-06-10', end: '2026-06-10', color: 'green', userName: 'Ala' }),
       );
-      const day = dayOfMonth(1);
+      const day = dayOfMonth(10);
       if (!day) return;
 
       component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
@@ -515,8 +491,8 @@ describe('Calendar', () => {
 
       component.onDayClick(day);
       expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-01',
-        end: '2026-06-01',
+        start: '2026-06-10',
+        end: '2026-06-10',
         color: 'green',
         userName: 'Ala',
       });
@@ -548,9 +524,9 @@ describe('Calendar', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
       periodService.createPeriod.mockReturnValue(
-        of({ id: 't6', start: '2026-06-01', end: '2026-06-01', color: 'green', userName: 'Ala' }),
+        of({ id: 't6', start: '2026-06-06', end: '2026-06-06', color: 'green', userName: 'Ala' }),
       );
-      const day = dayOfMonth(1);
+      const day = dayOfMonth(6);
       if (!day) return;
 
       component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
@@ -560,8 +536,8 @@ describe('Calendar', () => {
 
       component.onDayClick(day);
       expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-01',
-        end: '2026-06-01',
+        start: '2026-06-06',
+        end: '2026-06-06',
         color: 'green',
         userName: 'Ala',
       });
@@ -582,25 +558,9 @@ describe('Calendar', () => {
       expect(periodService.createPeriod).not.toHaveBeenCalled();
     });
 
-    it('removes the own marking on tap while erasing, without showing the tooltip', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Ala');
-      periodService.deletePeriod.mockReturnValue(of(null));
-      const day = dayOfMonth(1);
-      if (!day) return;
-
-      component.isErasing.set(true);
-      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
-      expect(component.tooltipDay()).toBeNull();
-
-      component.onDayClick(day);
-
-      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
-      expect(component.periods().map((p) => p.id)).not.toContain('p1');
-    });
   });
 
-  describe('single-day selection', () => {
+  describe('click flow', () => {
     function dayOfMonth(n: number) {
       return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
     }
@@ -626,11 +586,30 @@ describe('Calendar', () => {
       expect(component.periods().length).toBe(3);
     });
 
-    it('shows the conflict error when tapping an already marked day', () => {
+    it('unmarks an own day when the selected color matches', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
+      periodService.deletePeriod.mockReturnValue(of(null));
+
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayClick(day);
+
+      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+      expect(component.errorMessage()).toBeNull();
+      expect(component.periods().length).toBe(1);
+      expect(component.periods()[0].id).toBe('p2');
+    });
+
+    it('recolors an own day when a different color is selected', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.selectColor('red');
+      periodService.deletePeriod.mockReturnValue(of(null));
       periodService.createPeriod.mockReturnValue(
-        throwError(() => new HttpErrorResponse({ status: 409 })),
+        of({ id: 'rc1', start: '2026-06-01', end: '2026-06-01', color: 'red', userName: 'Ala' }),
       );
 
       const day = dayOfMonth(1);
@@ -638,8 +617,37 @@ describe('Calendar', () => {
 
       component.onDayClick(day);
 
-      expect(component.errorMessage()).toBe('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
+      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-01',
+        end: '2026-06-01',
+        color: 'red',
+        userName: 'Ala',
+      });
       expect(component.periods().length).toBe(2);
+      expect(component.periods().map((p) => p.id)).toEqual(['p2', 'rc1']);
+    });
+
+    it('marks a day marked only by other users for the current user', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 'ot1', start: '2026-06-10', end: '2026-06-10', color: 'green', userName: 'Ala' }),
+      );
+
+      const day = dayOfMonth(10);
+      if (!day) return;
+
+      component.onDayClick(day);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-10',
+        end: '2026-06-10',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.deletePeriod).not.toHaveBeenCalled();
+      expect(component.periods().length).toBe(3);
     });
   });
 

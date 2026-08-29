@@ -322,11 +322,6 @@
   flex-wrap: wrap;
 }
 
-/* on desktop the hint/cancel row dissolves back into the toolbar's flex flow */
-.toolbar-row2 {
-  display: contents;
-}
-
 .color-swatch {
   display: inline-flex;
   align-items: center;
@@ -362,39 +357,6 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-}
-
-.erase-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
-  font-size: 0.9rem;
-  background: #f3f4f6;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s, transform 0.1s;
-  flex-shrink: 0;
-
-  &.active {
-    border-color: #111827;
-    transform: scale(1.15);
-    background: #e5e7eb;
-  }
-
-  &:hover:not(.active) {
-    border-color: #6b7280;
-  }
-}
-
-.toolbar-hint {
-  font-size: 0.8rem;
-  font-style: italic;
-  color: #6b7280;
 }
 
 /* ── Error banner ── */
@@ -594,7 +556,6 @@
 
 /* ── Touch ergonomics: no double-tap zoom delay ── */
 .color-swatch,
-.erase-btn,
 .nav-btn,
 .today-btn,
 .copy-link-btn,
@@ -664,27 +625,13 @@
   }
 
   .color-toolbar {
-    min-height: calc(44px + 6px + 44px);
     gap: 6px;
     padding-bottom: 12px;
-  }
-
-  .toolbar-row2 {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-height: 44px;
   }
 
   .color-swatch {
     min-height: 44px;
     padding: 8px 14px 8px 10px;
-  }
-
-  .erase-btn {
-    width: 44px;
-    height: 44px;
   }
 
   .today-btn,
@@ -714,11 +661,6 @@
 
   .topbar-actions {
     justify-content: flex-end;
-  }
-
-  .toolbar-hint {
-    font-size: 0.72rem;
-    white-space: nowrap;
   }
 
   .user-modal {

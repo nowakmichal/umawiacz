@@ -67,7 +67,7 @@
       @for (c of selectionColors; track c.value) {
         <button
           class="color-swatch"
-          [class.active]="!isErasing() && selectedColor() === c.value"
+          [class.active]="selectedColor() === c.value"
           (click)="selectColor(c.value)"
           [attr.aria-label]="c.label"
         >
@@ -75,19 +75,6 @@
           <span class="swatch-label">{{ c.label }}</span>
         </button>
       }
-      <button
-        class="erase-btn"
-        [class.active]="isErasing()"
-        (click)="toggleEraseMode()"
-        aria-label="Usuń oznaczenie"
-      >
-        ✕
-      </button>
-      <div class="toolbar-row2">
-        @if (isErasing()) {
-          <span class="toolbar-hint">Kliknij swój dzień, aby usunąć</span>
-        }
-      </div>
     </div>
 
     @if (errorMessage()) {
