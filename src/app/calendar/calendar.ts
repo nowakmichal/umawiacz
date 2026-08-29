@@ -39,6 +39,7 @@ interface CalendarDay {
 
 const POLL_INTERVAL_MS = 15_000;
 const LONG_PRESS_MS = 450;
+const SWIPE_THRESHOLD_PX = 10;
 const USERNAME_KEY = 'umawiacz_username';
 const EVENT_NOT_FOUND_MSG = 'Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.';
 const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj ponownie.';
@@ -63,6 +64,18 @@ export class Calendar implements OnInit, OnDestroy {
   private pendingClickSwallow = false;
   private longPressTimer: number | null = null;
 
+  // Swipe (touch) gesture state: anchor cell + start point, accumulated preview below
+  private swipeAnchor: string | null = null;
+  private swipeStartX = 0;
+  private swipeStartY = 0;
+  private swipeMoved = false;
+
+  // Mouse swipe gesture state
+  private pressAnchor: string | null = null;
+  private pressStartX = 0;
+  private pressStartY = 0;
+  private pressMoved = false;
+
   readonly eventId = this.route.snapshot.paramMap.get('eventId') ?? '';
 
   readonly selectionColors = SELECTION_COLORS;
@@ -83,6 +96,8 @@ export class Calendar implements OnInit, OnDestroy {
   readonly tooltipDay = signal<CalendarDay | null>(null);
   readonly tooltipPos = signal<{ x: number; y: number }>({ x: 0, y: 0 });
   readonly tooltipAbove = signal(true);
+
+  readonly previewDays = signal<string[]>([]);
 
   readonly monthLabel = computed(() =>
     this.viewDate().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' }),
@@ -281,6 +296,101 @@ export class Calendar implements OnInit, OnDestroy {
     this.longPressTimer = null;
   }
 
+  onGridTouchStart(event: TouchEvent): void {
+    const t = event.touches?.[0];
+    if (!t) return;
+    const anchor = this.cellAtPoint(t.clientX, t.clientY);
+    this.swipeAnchor = anchor?.dataset['date'] ?? null;
+    this.swipeStartX = t.clientX;
+    this.swipeStartY = t.clientY;
+    this.swipeMoved = false;
+    this.previewDays.set([]);
+  }
+
+  onGridTouchMove(event: TouchEvent): void {
+    this.cancelLongPress();
+
+    if (this.swipeAnchor === null) return;
+    const t = event.touches?.[0];
+    if (!t) return;
+
+    if (
+      !this.swipeMoved &&
+      Math.hypot(t.clientX - this.swipeStartX, t.clientY - this.swipeStartY) <= SWIPE_THRESHOLD_PX
+    ) {
+      return;
+    }
+
+    if (!this.swipeMoved) {
+      this.swipeMoved = true;
+      this.tooltipDay.set(null);
+    }
+
+    event.preventDefault();
+
+    const iso = this.cellAtPoint(t.clientX, t.clientY)?.dataset['date'];
+    if (iso) {
+      this.addPreviewDay(iso);
+    }
+  }
+
+  onGridTouchEnd(event: TouchEvent): void {
+    this.cancelLongPress();
+    if (this.swipeMoved) {
+      this.pendingClickSwallow = true;
+      this.commitPreviewDays();
+    }
+    this.swipeAnchor = null;
+    this.swipeMoved = false;
+    this.previewDays.set([]);
+  }
+
+  onGridTouchCancel(event: TouchEvent): void {
+    this.cancelLongPress();
+    this.swipeAnchor = null;
+    this.swipeMoved = false;
+    this.previewDays.set([]);
+  }
+
+  onGridMouseDown(event: MouseEvent): void {
+    const anchor = this.cellAtPoint(event.clientX, event.clientY);
+    this.pressAnchor = anchor?.dataset['date'] ?? null;
+    this.pressStartX = event.clientX;
+    this.pressStartY = event.clientY;
+    this.pressMoved = false;
+    this.previewDays.set([]);
+    event.preventDefault();
+  }
+
+  onGridMouseMove(event: MouseEvent): void {
+    if (this.pressAnchor === null) return;
+
+    if (
+      !this.pressMoved &&
+      Math.hypot(event.clientX - this.pressStartX, event.clientY - this.pressStartY) <=
+        SWIPE_THRESHOLD_PX
+    ) {
+      return;
+    }
+
+    this.pressMoved = true;
+
+    const iso = this.cellAtPoint(event.clientX, event.clientY)?.dataset['date'];
+    if (iso) {
+      this.addPreviewDay(iso);
+    }
+  }
+
+  onGridMouseUp(event: MouseEvent): void {
+    if (this.pressMoved) {
+      this.pendingClickSwallow = true;
+      this.commitPreviewDays();
+    }
+    this.pressAnchor = null;
+    this.pressMoved = false;
+    this.previewDays.set([]);
+  }
+
   onDayClick(day: CalendarDay): void {
     if (this.pendingClickSwallow) {
       this.pendingClickSwallow = false;
@@ -356,6 +466,31 @@ export class Calendar implements OnInit, OnDestroy {
   logout(): void {
     this.authService.logout();
     this.currentUser.set(null);
+  }
+
+  private cellAtPoint(x: number, y: number): HTMLElement | null {
+    if (typeof document === 'undefined' || typeof document.elementFromPoint !== 'function') {
+      return null;
+    }
+    return (document.elementFromPoint(x, y) as Element | null)?.closest(
+      '.day-cell',
+    ) as HTMLElement | null;
+  }
+
+  private addPreviewDay(iso: string): void {
+    const day = this.weeks()
+      .flat()
+      .find((d) => d.date.toISOString() === iso);
+    if (!day || day.ownColor !== null) return;
+    if (!this.previewDays().includes(iso)) {
+      this.previewDays.update((list) => [...list, iso]);
+    }
+  }
+
+  private commitPreviewDays(): void {
+    for (const iso of this.previewDays()) {
+      this.confirmSelection(new Date(iso));
+    }
   }
 
   private positionTooltip(day: CalendarDay, el: HTMLElement): void {

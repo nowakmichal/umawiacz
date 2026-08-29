@@ -452,6 +452,10 @@
     background: #fef2f2;
   }
 
+  &.selecting {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
   &.other-month .day-number {
     color: #d1d5db;
   }

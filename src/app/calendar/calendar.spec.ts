@@ -6,7 +6,7 @@ import { Calendar } from './calendar';
 import { PeriodService } from '../services/period.service';
 import { EventService } from '../services/event.service';
 import { AuthService } from '../services/auth.service';
-import { SELECTION_COLORS, Period } from '../models/period.model';
+import { SELECTION_COLORS, Period, CreateTimePeriodRequest } from '../models/period.model';
 import { Event } from '../models/event.model';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -648,6 +648,224 @@ describe('Calendar', () => {
       });
       expect(periodService.deletePeriod).not.toHaveBeenCalled();
       expect(component.periods().length).toBe(3);
+    });
+  });
+
+  describe('swipe selection', () => {
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
+
+    function cellFor(day: CalDay): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    // jsdom has no Touch/TouchList and no document.elementFromPoint, so build the
+    // touch events by hand and stub elementFromPoint with the rendered cells.
+    function touchEvent(type: string, cell: HTMLElement, x: number, y: number): TouchEvent {
+      const ev = new TouchEvent(type, { bubbles: true, cancelable: true });
+      const touch = { identifier: 0, target: cell, clientX: x, clientY: y };
+      Object.defineProperty(ev, 'touches', { configurable: true, get: () => [touch] });
+      return ev;
+    }
+
+    function mouseEvent(type: string, cell: HTMLElement, x: number, y: number): MouseEvent {
+      return new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+    }
+
+    let restoreElementFromPoint: (() => void) | null = null;
+
+    function stubElementFromPoint(impl: (x: number, y: number) => Element | null): void {
+      const original = document.elementFromPoint;
+      document.elementFromPoint = impl;
+      restoreElementFromPoint = () => {
+        document.elementFromPoint = original;
+      };
+    }
+
+    function mockCreate(): void {
+      periodService.createPeriod.mockImplementation(
+        (eventId: string, req: CreateTimePeriodRequest) =>
+          of({
+            id: `sw-${req.start}`,
+            start: req.start,
+            end: req.end,
+            color: req.color,
+            userName: req.userName,
+          }),
+      );
+    }
+
+    afterEach(() => {
+      restoreElementFromPoint?.();
+      restoreElementFromPoint = null;
+    });
+
+    it('marks each day a touch swipe passes over as a one-day period and swallows the release click', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      mockCreate();
+
+      const a = dayOfMonth(6);
+      const b = dayOfMonth(7);
+      const c = dayOfMonth(8);
+      if (!a || !b || !c) return;
+      const cellA = cellFor(a);
+      const cellB = cellFor(b);
+      const cellC = cellFor(c);
+
+      stubElementFromPoint((x) => (x < 105 ? cellA : x < 120 ? cellB : cellC));
+
+      cellA.dispatchEvent(touchEvent('touchstart', cellA, 100, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 115, 100));
+      fixture.detectChanges();
+      expect(cellB.classList.contains('selecting')).toBe(true);
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 125, 100));
+      cellA.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
+
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(2);
+      expect(periodService.createPeriod.mock.calls.map((call) => call[1].start)).toEqual([
+        '2026-06-07',
+        '2026-06-08',
+      ]);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-07',
+        end: '2026-06-07',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-08',
+        end: '2026-06-08',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.createPeriod).not.toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-06',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.deletePeriod).not.toHaveBeenCalled();
+      expect(component.previewDays()).toEqual([]);
+
+      cellC.click();
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips days the current user already marked and marks the rest of the swipe path', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      mockCreate();
+
+      // Ala owns 2026-06-01..05 (period p1): days 3-5 are pre-marked, day 6 is free
+      const a = dayOfMonth(3);
+      const b = dayOfMonth(4);
+      const c = dayOfMonth(5);
+      const d = dayOfMonth(6);
+      if (!a || !b || !c || !d) return;
+      const cellA = cellFor(a);
+      const cellB = cellFor(b);
+      const cellC = cellFor(c);
+      const cellD = cellFor(d);
+
+      stubElementFromPoint((x) => (x < 105 ? cellA : x < 118 ? cellB : x < 128 ? cellC : cellD));
+
+      cellA.dispatchEvent(touchEvent('touchstart', cellA, 100, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 115, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 125, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 135, 100));
+      cellA.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
+
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(1);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-06',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.deletePeriod).not.toHaveBeenCalled();
+
+      cellD.click();
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a touch that moves below the swipe threshold as a tap', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      mockCreate();
+
+      const a = dayOfMonth(6);
+      if (!a) return;
+      const cellA = cellFor(a);
+
+      stubElementFromPoint(() => cellA);
+
+      cellA.dispatchEvent(touchEvent('touchstart', cellA, 100, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 105, 100));
+      cellA.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
+
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+      expect(component.previewDays()).toEqual([]);
+
+      cellA.click();
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(1);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-06',
+        color: 'green',
+        userName: 'Ala',
+      });
+    });
+
+    it('marks each day a mouse drag passes over as a one-day period and swallows the release click', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      mockCreate();
+
+      const a = dayOfMonth(6);
+      const b = dayOfMonth(7);
+      const c = dayOfMonth(8);
+      if (!a || !b || !c) return;
+      const cellA = cellFor(a);
+      const cellB = cellFor(b);
+      const cellC = cellFor(c);
+
+      stubElementFromPoint((x) => (x < 105 ? cellA : x < 120 ? cellB : cellC));
+
+      cellA.dispatchEvent(mouseEvent('mousedown', cellA, 100, 100));
+      cellB.dispatchEvent(mouseEvent('mousemove', cellB, 115, 100));
+      cellC.dispatchEvent(mouseEvent('mousemove', cellC, 125, 100));
+      cellC.dispatchEvent(mouseEvent('mouseup', cellC, 125, 100));
+
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(2);
+      expect(periodService.createPeriod.mock.calls.map((call) => call[1].start)).toEqual([
+        '2026-06-07',
+        '2026-06-08',
+      ]);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-07',
+        end: '2026-06-07',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-08',
+        end: '2026-06-08',
+        color: 'green',
+        userName: 'Ala',
+      });
+      expect(periodService.deletePeriod).not.toHaveBeenCalled();
+
+      cellC.click();
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(2);
     });
   });
 

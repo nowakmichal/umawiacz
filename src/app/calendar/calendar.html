@@ -84,7 +84,16 @@
       </div>
     }
 
-    <div class="cal-grid">
+    <div
+      class="cal-grid"
+      (touchstart)="onGridTouchStart($event)"
+      (touchmove)="onGridTouchMove($event)"
+      (touchend)="onGridTouchEnd($event)"
+      (touchcancel)="onGridTouchCancel($event)"
+      (mousedown)="onGridMouseDown($event)"
+      (mousemove)="onGridMouseMove($event)"
+      (mouseup)="onGridMouseUp($event)"
+    >
       <div class="weekday-row">
         @for (day of weekDays; track day) {
           <div class="weekday-cell">{{ day }}</div>
@@ -98,6 +107,7 @@
               class="day-cell"
               [class.other-month]="!day.inCurrentMonth"
               [class.today]="day.isToday"
+              [class.selecting]="previewDays().includes(day.date.toISOString())"
               [class.tint-free]="day.ownColor === 'green'"
               [class.tint-busy]="day.ownColor === 'red'"
               [class.has-markings]="day.markings.length > 0"
