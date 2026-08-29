@@ -327,8 +327,7 @@
   display: contents;
 }
 
-.color-swatch,
-.mode-btn {
+.color-swatch {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
@@ -365,10 +364,6 @@
   }
 }
 
-.mode-btn {
-  padding: 4px 10px;
-}
-
 .erase-btn {
   width: 32px;
   height: 32px;
@@ -396,32 +391,10 @@
   }
 }
 
-.mode-toggle {
-  display: inline-flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
 .toolbar-hint {
   font-size: 0.8rem;
   font-style: italic;
   color: #6b7280;
-}
-
-.cancel-btn {
-  background: none;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 2px 10px;
-  font-size: 0.8rem;
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
-
-  &:hover {
-    background: #e5e7eb;
-  }
 }
 
 /* ── Error banner ── */
@@ -526,14 +499,6 @@
     color: #ffffff;
     border-radius: 50%;
   }
-
-  &.selecting {
-    background: rgba(0, 0, 0, 0.05);
-  }
-
-  &.selection-start {
-    background: rgba(0, 0, 0, 0.09);
-  }
 }
 
 .day-number {
@@ -632,7 +597,6 @@
 .erase-btn,
 .nav-btn,
 .today-btn,
-.cancel-btn,
 .copy-link-btn,
 .logout-btn,
 .topbar-link,
@@ -642,7 +606,7 @@
   touch-action: manipulation;
 }
 
-/* vertical swipe = page scroll (browser takes over, aborted via touchcancel); horizontal drag = range selection */
+/* vertical swipe = page scroll */
 .cal-grid {
   touch-action: pan-y;
 }
@@ -723,12 +687,7 @@
     height: 44px;
   }
 
-  .mode-btn {
-    min-height: 44px;
-  }
-
   .today-btn,
-  .cancel-btn,
   .copy-link-btn,
   .logout-btn,
   .topbar-link,
@@ -791,8 +750,7 @@
     gap: 5px;
   }
 
-  .color-swatch,
-  .mode-btn {
+  .color-swatch {
     padding: 6px 8px;
     font-size: 0.78rem;
   }

@@ -258,40 +258,25 @@ describe('Calendar', () => {
       component.toggleEraseMode();
       expect(component.isErasing()).toBe(false);
     });
-
-    it('should clear selection when entering erase mode', () => {
-      component.selectionStart.set(new Date());
-      component.toggleEraseMode();
-      expect(component.selectionStart()).toBeNull();
-    });
   });
 
   describe('selection flow', () => {
-    it('should set selectionStart on first click', () => {
-      const day = component.weeks()[2][3];
-      component.onDayClick(day);
-      expect(component.selectionStart()).toEqual(day.date);
-    });
-
-    it('should call createPeriod on second click', () => {
+    it('should call createPeriod with a single-day period on one click', () => {
       component.currentUser.set('Ala');
-      const resp = { id: 'new-id', start: '2026-06-15', end: '2026-06-16', color: 'green', userName: 'Ala' };
+      const resp = { id: 'new-id', start: '2026-06-15', end: '2026-06-15', color: 'green', userName: 'Ala' };
       periodService.createPeriod.mockReturnValue(of(resp));
 
-      const day1 = { ...component.weeks()[2][3], date: new Date(2026, 5, 15) };
-      const day2 = { ...component.weeks()[2][4], date: new Date(2026, 5, 16) };
-
-      component.onDayClick(day1);
-      component.onDayClick(day2);
+      const day = { ...component.weeks()[2][3], date: new Date(2026, 5, 15) };
+      component.onDayClick(day);
 
       expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
         start: '2026-06-15',
-        end: '2026-06-16',
+        end: '2026-06-15',
         color: 'green',
         userName: 'Ala',
       });
       expect(component.periods().length).toBe(3);
-      expect(component.selectionStart()).toBeNull();
+      expect(component.isSaving()).toBe(false);
     });
 
     it('should show error on 409 conflict', () => {
@@ -299,10 +284,8 @@ describe('Calendar', () => {
       const err = new HttpErrorResponse({ status: 409 });
       periodService.createPeriod.mockReturnValue(throwError(() => err));
 
-      const day1 = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
-      const day2 = { ...component.weeks()[3][1], date: new Date(2026, 5, 21) };
-      component.onDayClick(day1);
-      component.onDayClick(day2);
+      const day = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
+      component.onDayClick(day);
 
       expect(component.errorMessage()).toBe('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
       expect(component.periods().length).toBe(2);
@@ -312,51 +295,13 @@ describe('Calendar', () => {
       component.currentUser.set('Ala');
       periodService.createPeriod.mockReturnValue(throwError(() => new Error('Network error')));
 
-      const day1 = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
-      const day2 = { ...component.weeks()[3][1], date: new Date(2026, 5, 21) };
-      component.onDayClick(day1);
-      component.onDayClick(day2);
+      const day = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
+      component.onDayClick(day);
 
       expect(component.periods().length).toBe(3);
       expect(component.periods()[2].eventId).toBe(EVENT_ID);
-      expect(component.selectionStart()).toBeNull();
-    });
-
-    it('should cancel selection', () => {
-      component.selectionStart.set(new Date());
-      component.hoverDate.set(new Date());
-      component.cancelSelection();
-      expect(component.selectionStart()).toBeNull();
-      expect(component.hoverDate()).toBeNull();
-    });
-  });
-
-  describe('isSelectionStart', () => {
-    it('should return true for the selection start day', () => {
-      const date = new Date(2026, 5, 15);
-      component.selectionStart.set(date);
-      const day = {
-        date,
-        inCurrentMonth: true,
-        isToday: false,
-        markings: [],
-        isSelecting: false,
-        ownColor: null,
-      };
-      expect(component.isSelectionStart(day)).toBe(true);
-    });
-
-    it('should return false for other days', () => {
-      component.selectionStart.set(new Date(2026, 5, 15));
-      const day = {
-        date: new Date(2026, 5, 16),
-        inCurrentMonth: true,
-        isToday: false,
-        markings: [],
-        isSelecting: false,
-        ownColor: null,
-      };
-      expect(component.isSelectionStart(day)).toBe(false);
+      expect(component.periods()[2].start).toBe('2026-06-20');
+      expect(component.periods()[2].end).toBe('2026-06-20');
     });
   });
 
@@ -535,8 +480,12 @@ describe('Calendar', () => {
       vi.useRealTimers();
     });
 
-    it('does not swallow the click on an unmarked day, so a tap starts the selection', () => {
+    it('does not swallow the click on an unmarked day, so a tap marks it', () => {
       component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 't3', start: '2026-06-06', end: '2026-06-06', color: 'green', userName: 'Ala' }),
+      );
       const day = dayOfMonth(6);
       if (!day) return;
 
@@ -544,11 +493,20 @@ describe('Calendar', () => {
       expect(component.tooltipDay()).toBeNull();
 
       component.onDayClick(day);
-      expect(component.selectionStart()).toEqual(day.date);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-06',
+        color: 'green',
+        userName: 'Ala',
+      });
     });
 
-    it('does not open the tooltip on a plain touch of a marked day; the tap starts the selection', () => {
+    it('does not open the tooltip on a plain touch of a marked day; the tap marks it', () => {
       component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 't4', start: '2026-06-01', end: '2026-06-01', color: 'green', userName: 'Ala' }),
+      );
       const day = dayOfMonth(1);
       if (!day) return;
 
@@ -556,12 +514,21 @@ describe('Calendar', () => {
       expect(component.tooltipDay()).toBeNull();
 
       component.onDayClick(day);
-      expect(component.selectionStart()).toEqual(day.date);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-01',
+        end: '2026-06-01',
+        color: 'green',
+        userName: 'Ala',
+      });
     });
 
     it('opens the tooltip on a long press of a marked day and swallows the following click', () => {
       vi.useFakeTimers();
       component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 't5', start: '2026-06-01', end: '2026-06-01', color: 'green', userName: 'Ala' }),
+      );
       const day = dayOfMonth(1);
       if (!day) return;
 
@@ -573,12 +540,16 @@ describe('Calendar', () => {
       expect(component.tooltipDay()).toBe(day);
 
       component.onDayClick(day);
-      expect(component.selectionStart()).toBeNull();
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
     });
 
-    it('cancels the pending long press on a quick tap, so the tap starts the selection', () => {
+    it('cancels the pending long press on a quick tap, so the tap marks the day', () => {
       vi.useFakeTimers();
       component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 't6', start: '2026-06-01', end: '2026-06-01', color: 'green', userName: 'Ala' }),
+      );
       const day = dayOfMonth(1);
       if (!day) return;
 
@@ -588,7 +559,12 @@ describe('Calendar', () => {
       expect(component.tooltipDay()).toBeNull();
 
       component.onDayClick(day);
-      expect(component.selectionStart()).toEqual(day.date);
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-01',
+        end: '2026-06-01',
+        color: 'green',
+        userName: 'Ala',
+      });
     });
 
     it('hides an open tooltip on a tap elsewhere and swallows that click', () => {
@@ -603,74 +579,7 @@ describe('Calendar', () => {
       expect(component.tooltipDay()).toBeNull();
 
       component.onDayClick(other);
-      expect(component.selectionStart()).toBeNull();
-    });
-
-    it('completes a range selection via two taps, without hover', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Ala');
-      periodService.createPeriod.mockReturnValue(
-        of({ id: 't1', start: '2026-06-06', end: '2026-06-07', color: 'green', userName: 'Ala' }),
-      );
-
-      const day1 = dayOfMonth(6);
-      const day2 = dayOfMonth(7);
-      if (!day1 || !day2) return;
-
-      component.onDayTouchStart(day1, { currentTarget: cellFor(day1) } as unknown as TouchEvent);
-      component.onDayClick(day1);
-      expect(component.selectionStart()).toEqual(day1.date);
-
-      component.onDayTouchStart(day2, { currentTarget: cellFor(day2) } as unknown as TouchEvent);
-      component.onDayClick(day2);
-
-      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-06',
-        end: '2026-06-07',
-        color: 'green',
-        userName: 'Ala',
-      });
-      expect(component.selectionStart()).toBeNull();
-    });
-
-    it('completes a range selection via two taps on marked days', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Boska');
-      periodService.createPeriod.mockReturnValue(
-        of({ id: 't2', start: '2026-06-01', end: '2026-06-05', color: 'green', userName: 'Boska' }),
-      );
-
-      const day1 = dayOfMonth(1);
-      const day2 = dayOfMonth(5);
-      if (!day1 || !day2) return;
-
-      component.onDayTouchStart(day1, { currentTarget: cellFor(day1) } as unknown as TouchEvent);
-      component.onDayClick(day1);
-      expect(component.selectionStart()).toEqual(day1.date);
-
-      component.onDayTouchStart(day2, { currentTarget: cellFor(day2) } as unknown as TouchEvent);
-      component.onDayClick(day2);
-
-      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-01',
-        end: '2026-06-05',
-        color: 'green',
-        userName: 'Boska',
-      });
-      expect(component.selectionStart()).toBeNull();
-    });
-
-    it('keeps the selection active and skips the tooltip while selecting', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      const start = dayOfMonth(6);
-      const marked = dayOfMonth(1);
-      if (!start || !marked) return;
-
-      component.selectionStart.set(start.date);
-      component.onDayTouchStart(marked, { currentTarget: cellFor(marked) } as unknown as TouchEvent);
-
-      expect(component.tooltipDay()).toBeNull();
-      expect(component.selectionStart()).toEqual(start.date);
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
     });
 
     it('removes the own marking on tap while erasing, without showing the tooltip', () => {
@@ -691,134 +600,14 @@ describe('Calendar', () => {
     });
   });
 
-  describe('swipe range selection', () => {
-    let elementFromPoint: ReturnType<typeof vi.fn>;
-
-    function dayCells(): HTMLElement[] {
-      fixture.detectChanges();
-      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
-    }
-
+  describe('single-day selection', () => {
     function dayOfMonth(n: number) {
       return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
-    }
-
-    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
-
-    function cellFor(day: CalDay): HTMLElement {
-      return dayCells()[component.weeks().flat().indexOf(day)];
-    }
-
-    beforeEach(() => {
-      elementFromPoint = vi.fn();
-      Object.defineProperty(document, 'elementFromPoint', {
-        value: elementFromPoint,
-        writable: true,
-        configurable: true,
-      });
-    });
-
-    afterEach(() => {
-      delete (document as unknown as Record<string, unknown>)['elementFromPoint'];
-    });
-
-    it('creates a period by swiping from day A to day B with touch', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Ala');
-      periodService.createPeriod.mockReturnValue(
-        of({ id: 's1', start: '2026-06-06', end: '2026-06-08', color: 'green', userName: 'Ala' }),
-      );
-
-      const dayA = dayOfMonth(6);
-      const dayB = dayOfMonth(8);
-      if (!dayA || !dayB) return;
-
-      elementFromPoint.mockReturnValue(cellFor(dayB));
-
-      component.onDayTouchStart(dayA, { currentTarget: cellFor(dayA) } as unknown as TouchEvent);
-      component.onGridTouchMove(
-        { touches: [{ clientX: 60, clientY: 5 }], preventDefault: vi.fn() } as unknown as TouchEvent,
-      );
-      expect(component.selectionStart()).toEqual(dayA.date);
-
-      component.onGridTouchEnd({} as unknown as TouchEvent);
-
-      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-06',
-        end: '2026-06-08',
-        color: 'green',
-        userName: 'Ala',
-      });
-      expect(component.selectionStart()).toBeNull();
-    });
-
-    it('creates a period by swiping from day A to day B with the mouse', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Ala');
-      periodService.createPeriod.mockReturnValue(
-        of({ id: 's2', start: '2026-06-06', end: '2026-06-08', color: 'green', userName: 'Ala' }),
-      );
-
-      const dayA = dayOfMonth(6);
-      const dayB = dayOfMonth(8);
-      if (!dayA || !dayB) return;
-
-      elementFromPoint.mockReturnValue(cellFor(dayB));
-
-      component.onDayMouseDown(
-        dayA,
-        { clientX: 100, clientY: 100, preventDefault: vi.fn() } as unknown as MouseEvent,
-      );
-      component.onGridMouseMove({ clientX: 160, clientY: 100 } as unknown as MouseEvent);
-      component.onGridMouseUp({} as unknown as MouseEvent);
-
-      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-06',
-        end: '2026-06-08',
-        color: 'green',
-        userName: 'Ala',
-      });
-      expect(component.selectionStart()).toBeNull();
-    });
-
-    it('does not start a selection or create a period when the touch stays within the jitter threshold', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      const dayA = dayOfMonth(6);
-      if (!dayA) return;
-
-      elementFromPoint.mockReturnValue(null);
-
-      component.onDayTouchStart(dayA, { currentTarget: cellFor(dayA) } as unknown as TouchEvent);
-      component.onGridTouchMove(
-        { touches: [{ clientX: 5, clientY: 2 }], preventDefault: vi.fn() } as unknown as TouchEvent,
-      );
-      expect(component.selectionStart()).toBeNull();
-
-      component.onGridTouchEnd({} as unknown as TouchEvent);
-      expect(periodService.createPeriod).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('single-day mode', () => {
-    function dayCells(): HTMLElement[] {
-      fixture.detectChanges();
-      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
-    }
-
-    function dayOfMonth(n: number) {
-      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
-    }
-
-    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
-
-    function cellFor(day: CalDay): HTMLElement {
-      return dayCells()[component.weeks().flat().indexOf(day)];
     }
 
     it('creates a one-day period on a single click', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
-      component.setSelectionMode('single');
       periodService.createPeriod.mockReturnValue(
         of({ id: 'sd1', start: '2026-06-15', end: '2026-06-15', color: 'green', userName: 'Ala' }),
       );
@@ -834,14 +623,12 @@ describe('Calendar', () => {
         color: 'green',
         userName: 'Ala',
       });
-      expect(component.selectionStart()).toBeNull();
       expect(component.periods().length).toBe(3);
     });
 
     it('shows the conflict error when tapping an already marked day', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
-      component.setSelectionMode('single');
       periodService.createPeriod.mockReturnValue(
         throwError(() => new HttpErrorResponse({ status: 409 })),
       );
@@ -853,60 +640,6 @@ describe('Calendar', () => {
 
       expect(component.errorMessage()).toBe('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
       expect(component.periods().length).toBe(2);
-    });
-
-    it('clears the selection state when switching modes', () => {
-      component.selectionStart.set(new Date(2026, 5, 15));
-      component.hoverDate.set(new Date(2026, 5, 16));
-
-      component.setSelectionMode('single');
-      expect(component.selectionMode()).toBe('single');
-      expect(component.selectionStart()).toBeNull();
-      expect(component.hoverDate()).toBeNull();
-
-      component.setSelectionMode('range');
-      expect(component.selectionMode()).toBe('range');
-      expect(component.selectionStart()).toBeNull();
-      expect(component.hoverDate()).toBeNull();
-    });
-
-    it('does not start a touch swipe in single mode', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Ala');
-      component.setSelectionMode('single');
-
-      const day = dayOfMonth(6);
-      if (!day) return;
-
-      component.onDayTouchStart(day, { currentTarget: cellFor(day) } as unknown as TouchEvent);
-      component.onGridTouchMove(
-        { touches: [{ clientX: 60, clientY: 5 }], preventDefault: vi.fn() } as unknown as TouchEvent,
-      );
-      component.onGridTouchEnd({} as unknown as TouchEvent);
-
-      expect(component.selectionStart()).toBeNull();
-      expect(component.hoverDate()).toBeNull();
-      expect(periodService.createPeriod).not.toHaveBeenCalled();
-    });
-
-    it('does not start a mouse press in single mode', () => {
-      component.viewDate.set(new Date(2026, 5, 1));
-      component.currentUser.set('Ala');
-      component.setSelectionMode('single');
-
-      const day = dayOfMonth(6);
-      if (!day) return;
-
-      component.onDayMouseDown(
-        day,
-        { clientX: 100, clientY: 100, preventDefault: vi.fn() } as unknown as MouseEvent,
-      );
-      component.onGridMouseMove({ clientX: 160, clientY: 100 } as unknown as MouseEvent);
-      component.onGridMouseUp({} as unknown as MouseEvent);
-
-      expect(component.selectionStart()).toBeNull();
-      expect(component.hoverDate()).toBeNull();
-      expect(periodService.createPeriod).not.toHaveBeenCalled();
     });
   });
 

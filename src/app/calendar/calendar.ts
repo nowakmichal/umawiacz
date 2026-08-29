@@ -34,18 +34,14 @@ interface CalendarDay {
   inCurrentMonth: boolean;
   isToday: boolean;
   markings: DayMarking[];
-  isSelecting: boolean;
   ownColor: SelectionColor | null;
 }
 
 const POLL_INTERVAL_MS = 15_000;
 const LONG_PRESS_MS = 450;
-const SWIPE_THRESHOLD_PX = 10;
 const USERNAME_KEY = 'umawiacz_username';
 const EVENT_NOT_FOUND_MSG = 'Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.';
 const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj ponownie.';
-
-export type SelectionMode = 'range' | 'single';
 
 @Component({
   selector: 'app-calendar',
@@ -67,29 +63,13 @@ export class Calendar implements OnInit, OnDestroy {
   private pendingClickSwallow = false;
   private longPressTimer: number | null = null;
 
-  // Swipe (drag range) gesture state
-  private swipeAnchor: Date | null = null;
-  private swipeStartX = 0;
-  private swipeStartY = 0;
-  private swipeMoved = false;
-
-  // Mouse swipe (drag range) gesture state
-  private pressAnchor: Date | null = null;
-  private pressStartX = 0;
-  private pressStartY = 0;
-  private pressMoved = false;
-  private pressStartedFresh = false;
-
   readonly eventId = this.route.snapshot.paramMap.get('eventId') ?? '';
 
   readonly selectionColors = SELECTION_COLORS;
 
   readonly viewDate = signal(new Date(this.today.getFullYear(), this.today.getMonth(), 1));
   readonly selectedColor = signal<SelectionColor>('green');
-  readonly selectionMode = signal<SelectionMode>('range');
   readonly isErasing = signal(false);
-  readonly selectionStart = signal<Date | null>(null);
-  readonly hoverDate = signal<Date | null>(null);
   readonly periods = signal<Period[]>([]);
   readonly isSaving = signal(false);
 
@@ -128,8 +108,6 @@ export class Calendar implements OnInit, OnDestroy {
     gridStart.setDate(gridStart.getDate() - startOffset);
 
     const activePeriods = this.periods();
-    const start = this.selectionStart();
-    const hover = this.hoverDate();
     const user = this.currentUser()?.trim().toLowerCase() || null;
 
     const colorMap = new Map(SELECTION_COLORS.map((c) => [c.value, c.hex]));
@@ -157,20 +135,11 @@ export class Calendar implements OnInit, OnDestroy {
         : undefined;
       const ownColor = ownPeriod ? ownPeriod.color : null;
 
-      let isSelecting = false;
-      if (start) {
-        const rangeEnd = hover ?? start;
-        const lo = start <= rangeEnd ? start : rangeEnd;
-        const hi = start <= rangeEnd ? rangeEnd : start;
-        isSelecting = lo <= date && date <= hi;
-      }
-
       days.push({
         date,
         inCurrentMonth: date.getMonth() === month,
         isToday: this.isSameDay(date, this.today),
         markings,
-        isSelecting,
         ownColor,
       });
       cursor.setDate(cursor.getDate() + 1);
@@ -195,8 +164,6 @@ export class Calendar implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.cancelLongPress();
-    this.resetSwipeState();
-    this.cancelPress();
   }
 
   ngOnInit(): void {
@@ -264,55 +231,24 @@ export class Calendar implements OnInit, OnDestroy {
   }
 
   toggleEraseMode(): void {
-    const next = !this.isErasing();
-    this.isErasing.set(next);
-    if (next) {
-      this.selectionStart.set(null);
-      this.hoverDate.set(null);
-    }
-  }
-
-  setSelectionMode(mode: SelectionMode): void {
-    this.selectionMode.set(mode);
-    this.selectionStart.set(null);
-    this.hoverDate.set(null);
-    this.cancelLongPress();
-    this.resetSwipeState();
-    this.cancelPress();
+    this.isErasing.set(!this.isErasing());
   }
 
   onDayMouseEnter(day: CalendarDay, event: MouseEvent): void {
-    if (this.selectionStart()) {
-      this.hoverDate.set(day.date);
-      return;
-    }
     if (day.markings.length && !this.isErasing()) {
       this.positionTooltip(day, event.currentTarget as HTMLElement);
     }
   }
 
   onDayMouseLeave(): void {
-    this.hoverDate.set(null);
     this.tooltipDay.set(null);
   }
 
   onDayMouseDown(day: CalendarDay, event: MouseEvent): void {
     if (this.isErasing()) return;
 
-    // Prevent text selection while dragging; the synthetic click still fires.
+    // Prevent text selection while pressing; the synthetic click still fires.
     event.preventDefault();
-
-    if (this.selectionMode() === 'single') return;
-
-    this.pressStartedFresh = this.selectionStart() === null;
-    if (!this.selectionStart()) {
-      this.selectionStart.set(day.date);
-    }
-
-    this.pressAnchor = this.selectionStart();
-    this.pressStartX = event.clientX;
-    this.pressStartY = event.clientY;
-    this.pressMoved = false;
   }
 
   /**
@@ -322,35 +258,18 @@ export class Calendar implements OnInit, OnDestroy {
    * the long-press fires, so the selection flow doesn't start unintentionally.
    */
   onDayTouchStart(day: CalendarDay, event: TouchEvent): void {
-    // A touch gesture must never confirm a stale mouse press.
-    this.cancelPress();
-
     // A new touch begins: drop any stale swallow left by a previous touch whose
     // synthetic click never fired (e.g. the gesture became a scroll).
     this.pendingClickSwallow = false;
 
-    if (this.isErasing() || this.selectionStart()) return;
+    if (this.isErasing()) return;
 
     if (this.tooltipDay()) {
-      // Dismiss tooltip; swallow the click so we don't start a selection
+      // Dismiss tooltip; swallow the click so we don't create a marking
       this.tooltipDay.set(null);
       this.pendingClickSwallow = true;
       return;
     }
-
-    if (this.selectionMode() === 'single') {
-      if (day.markings.length) {
-        this.startLongPress(day, event.currentTarget as HTMLElement);
-      }
-      return;
-    }
-
-    const t = event.touches?.[0];
-    this.swipeAnchor = day.date;
-    this.swipeStartX = t?.clientX ?? 0;
-    this.swipeStartY = t?.clientY ?? 0;
-    this.swipeMoved = false;
-    this.hoverDate.set(null);
 
     if (day.markings.length) {
       this.startLongPress(day, event.currentTarget as HTMLElement);
@@ -372,117 +291,6 @@ export class Calendar implements OnInit, OnDestroy {
     this.longPressTimer = null;
   }
 
-  onGridTouchMove(event: TouchEvent): void {
-    this.cancelLongPress();
-
-    if (this.selectionMode() === 'single') return;
-
-    const anchor = this.swipeAnchor;
-    if (anchor === null) return;
-    const t = event.touches?.[0];
-    if (!t) return;
-
-    if (
-      !this.swipeMoved &&
-      Math.hypot(t.clientX - this.swipeStartX, t.clientY - this.swipeStartY) <= SWIPE_THRESHOLD_PX
-    ) {
-      return;
-    }
-
-    if (!this.swipeMoved) {
-      this.swipeMoved = true;
-      this.selectionStart.set(anchor);
-      this.tooltipDay.set(null);
-    }
-
-    event.preventDefault();
-
-    const cell = this.cellAtPoint(t.clientX, t.clientY);
-    const iso = cell?.dataset['date'];
-    if (iso) {
-      this.hoverDate.set(new Date(iso));
-    }
-  }
-
-  onGridTouchEnd(event: TouchEvent): void {
-    this.cancelLongPress();
-
-    if (this.swipeAnchor !== null && this.swipeMoved) {
-      this.confirmSelection(this.swipeAnchor, this.hoverDate() ?? this.swipeAnchor);
-      this.pendingClickSwallow = true;
-    }
-
-    this.resetSwipeState();
-  }
-
-  onGridTouchCancel(event: TouchEvent): void {
-    this.cancelLongPress();
-
-    if (this.swipeMoved) {
-      this.selectionStart.set(null);
-    }
-
-    this.resetSwipeState();
-  }
-
-  private resetSwipeState(): void {
-    this.swipeAnchor = null;
-    this.swipeMoved = false;
-    this.hoverDate.set(null);
-  }
-
-  private cellAtPoint(x: number, y: number): HTMLElement | null {
-    if (typeof document === 'undefined' || typeof document.elementFromPoint !== 'function') {
-      return null;
-    }
-    return (document.elementFromPoint(x, y) as Element | null)?.closest(
-      '.day-cell',
-    ) as HTMLElement | null;
-  }
-
-  onGridMouseMove(event: MouseEvent): void {
-    if (this.selectionMode() === 'single') return;
-    if (this.pressAnchor === null) return;
-
-    if (
-      !this.pressMoved &&
-      Math.hypot(event.clientX - this.pressStartX, event.clientY - this.pressStartY) <= SWIPE_THRESHOLD_PX
-    ) {
-      return;
-    }
-
-    if (!this.pressMoved) {
-      this.pressMoved = true;
-    }
-
-    const cell = this.cellAtPoint(event.clientX, event.clientY);
-    const iso = cell?.dataset['date'];
-    if (iso) {
-      this.hoverDate.set(new Date(iso));
-    }
-  }
-
-  onGridMouseUp(event: MouseEvent): void {
-    if (this.pressAnchor !== null && this.pressMoved) {
-      this.confirmSelection(this.pressAnchor, this.hoverDate() ?? this.pressAnchor);
-      this.pendingClickSwallow = true;
-    }
-    if (this.pressAnchor !== null && !this.pressMoved && this.pressStartedFresh) {
-      this.selectionStart.set(null);
-    }
-    this.pressAnchor = null;
-    this.pressMoved = false;
-  }
-
-  cancelPress(): void {
-    if (this.pressMoved) {
-      this.selectionStart.set(null);
-      this.hoverDate.set(null);
-    }
-    this.pressAnchor = null;
-    this.pressMoved = false;
-  }
-
   onDayClick(day: CalendarDay): void {
     if (this.pendingClickSwallow) {
       this.pendingClickSwallow = false;
@@ -498,34 +306,20 @@ export class Calendar implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.selectionMode() === 'single') {
-      this.confirmSelection(day.date, day.date);
-      return;
-    }
-
-    const start = this.selectionStart();
-    if (!start) {
-      this.selectionStart.set(day.date);
-      return;
-    }
-
-    this.confirmSelection(start, day.date);
+    this.confirmSelection(day.date);
   }
 
-  private confirmSelection(start: Date, end: Date): void {
+  private confirmSelection(day: Date): void {
     const user = this.currentUser();
     if (!user) return;
 
-    const lo = start <= end ? start : end;
-    const hi = start <= end ? end : start;
-    const startStr = toIsoDate(lo);
-    const endStr = toIsoDate(hi);
+    const isoDate = toIsoDate(day);
     const color = this.selectedColor();
 
     this.isSaving.set(true);
     this.errorMessage.set(null);
     this.periodService
-      .createPeriod(this.eventId, { start: startStr, end: endStr, color, userName: user })
+      .createPeriod(this.eventId, { start: isoDate, end: isoDate, color, userName: user })
       .subscribe({
         next: (resp) => {
           this.periods.update((list) => [
@@ -539,8 +333,6 @@ export class Calendar implements OnInit, OnDestroy {
               userName: resp.userName,
             },
           ]);
-          this.selectionStart.set(null);
-          this.hoverDate.set(null);
           this.isSaving.set(false);
         },
         error: (err: HttpErrorResponse) => {
@@ -554,15 +346,13 @@ export class Calendar implements OnInit, OnDestroy {
               {
                 id: crypto.randomUUID(),
                 eventId: this.eventId,
-                start: startStr,
-                end: endStr,
+                start: isoDate,
+                end: isoDate,
                 color,
                 userName: user,
               },
             ]);
           }
-          this.selectionStart.set(null);
-          this.hoverDate.set(null);
           this.isSaving.set(false);
         },
       });
@@ -572,19 +362,9 @@ export class Calendar implements OnInit, OnDestroy {
     this.errorMessage.set(null);
   }
 
-  cancelSelection(): void {
-    this.selectionStart.set(null);
-    this.hoverDate.set(null);
-  }
-
   logout(): void {
     this.authService.logout();
     this.currentUser.set(null);
-  }
-
-  isSelectionStart(day: CalendarDay): boolean {
-    const start = this.selectionStart();
-    return start !== null && this.isSameDay(start, day.date);
   }
 
   private positionTooltip(day: CalendarDay, el: HTMLElement): void {
