@@ -4,6 +4,7 @@
 
 ```bash
 npm start                     # Angular dev server :4200 (proxies /api -> :5000 via proxy.conf.json)
+npm run start:local           # same, bound to 0.0.0.0 (e.g. for access from other devices)
 npm test                      # run all tests (Vitest, jsdom)
 npm test -- --watch=false     # single run (flag is --watch=false, NOT --run)
 npx ng test --include="src/app/calendar/**/*.spec.ts"  # single file
@@ -20,7 +21,7 @@ Start backend first (`cd api && dotnet run`), then `npm start`.
 - **Frontend**: Angular 21 SSR (Express). Standalone components, signal-based state, `@for`/`@if` control flow, SCSS.
 - **Backend**: C# ASP.NET Core `net10.0` minimal API with EF Core SQLite at `api/` (entry `api/Program.cs`). Endpoints: `GET/POST /api/events`, `GET /api/events/{id}`, `GET /api/events/{id}/calendar` (public, `{ event, periods }` for the shareable link), `GET/POST /api/events/{id}/periods`, `DELETE /api/periods/{id}`, `POST /api/login`.
 - **Proxy**: dev = `proxy.conf.json` (Angular dev-server); SSR/prod = `src/server.ts` raw proxy. Override backend URL with `API_URL` env var.
-- **Routing**: `src/app/app.routes.ts` — `/` redirects to `/events`; `events` is the event list/create screen (protected by the auth guard, `src/app/guards/auth.guard.ts`); `calendar/:eventId` is the **public** event calendar (no guard, SSR'd on demand via `app.routes.server.ts`, never prerendered); `login` for login.
+- **Routing**: `src/app/app.routes.ts` — `/` and `calendar` redirect to `/events`; `events` is the event list/create screen (protected by the auth guard, `src/app/guards/auth.guard.ts`); `calendar/:eventId` is the **public** event calendar (no guard, SSR'd on demand via `app.routes.server.ts`, never prerendered); `login` for login.
 - **Locale**: Polish (pl-PL) — all dates and UI text.
 
 ## Code style
