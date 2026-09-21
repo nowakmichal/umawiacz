@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PLATFORM_ID } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { Calendar } from './calendar';
 import { PeriodService } from '../services/period.service';
 import { EventService } from '../services/event.service';
@@ -255,16 +255,18 @@ describe('Calendar', () => {
       expect(component.isSaving()).toBe(false);
     });
 
-    it('should show error on 409 conflict', () => {
+    it('resyncs silently on 409 conflict', () => {
       component.currentUser.set('Ala');
       const err = new HttpErrorResponse({ status: 409 });
       periodService.createPeriod.mockReturnValue(throwError(() => err));
+      periodService.getPeriods.mockReturnValue(of([]));
 
       const day = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
       component.onDayClick(day);
 
-      expect(component.errorMessage()).toBe('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
-      expect(component.periods().length).toBe(2);
+      expect(periodService.getPeriods).toHaveBeenCalledWith(EVENT_ID);
+      expect(component.errorMessage()).toBeNull();
+      expect(component.periods()).toEqual([]);
     });
 
     it('should add period locally on network error (fallback)', () => {
@@ -626,6 +628,36 @@ describe('Calendar', () => {
       });
       expect(component.periods().length).toBe(2);
       expect(component.periods().map((p) => p.id)).toEqual(['p2', 'rc1']);
+    });
+
+    it('issues the recolor create only after the delete completes (chained)', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.selectColor('red');
+      const delete$ = new Subject<void>();
+      periodService.deletePeriod.mockReturnValue(delete$);
+      periodService.createPeriod.mockReturnValue(
+        of({ id: 'rc2', start: '2026-06-01', end: '2026-06-01', color: 'red', userName: 'Ala' }),
+      );
+
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayClick(day);
+
+      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+
+      delete$.next();
+      delete$.complete();
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-01',
+        end: '2026-06-01',
+        color: 'red',
+        userName: 'Ala',
+      });
+      expect(component.periods().map((p) => p.id)).toEqual(['p2', 'rc2']);
     });
 
     it('marks a day marked only by other users for the current user', () => {

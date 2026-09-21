@@ -43,6 +43,7 @@ const SWIPE_THRESHOLD_PX = 10;
 const USERNAME_KEY = 'umawiacz_username';
 const EVENT_NOT_FOUND_MSG = 'Nie znaleziono wydarzenia. Sprawdź, czy link jest poprawny.';
 const EVENT_LOAD_ERROR_MSG = 'Nie udało się załadować kalendarza. Spróbuj ponownie.';
+const RESYNC_ERROR_MSG = 'Nie udało się zsynchronizować kalendarza. Spróbuj ponownie.';
 
 @Component({
   selector: 'app-calendar',
@@ -398,25 +399,44 @@ export class Calendar implements OnInit, OnDestroy {
     }
 
     this.tooltipDay.set(null);
-
-    const ownMarking = day.markings.find((m) => m.own);
-    if (ownMarking && day.ownColor) {
-      this.removeMarking(ownMarking.periodId);
-      if (day.ownColor === this.selectedColor()) {
-        return;
-      }
-    }
-
-    this.confirmSelection(day.date);
+    this.paintDay(day, true);
   }
 
-  private confirmSelection(day: Date): void {
+  private paintDay(day: CalendarDay, toggle: boolean): void {
     const user = this.currentUser();
     if (!user) return;
 
-    const isoDate = toIsoDate(day);
+    const isoDate = toIsoDate(day.date);
     const color = this.selectedColor();
+    const ownMarking = day.markings.find((m) => m.own);
 
+    if (ownMarking && day.ownColor === color) {
+      if (!toggle) return;
+      this.removeMarking(ownMarking.periodId);
+      return;
+    }
+
+    if (ownMarking && day.ownColor !== color) {
+      // Different own color: chain delete → create so the server's per-user
+      // overlap check never sees the old period still on the server.
+      this.isSaving.set(true);
+      this.errorMessage.set(null);
+      this.periodService.deletePeriod(ownMarking.periodId).subscribe({
+        next: () => {
+          this.periods.update((list) => list.filter((p) => p.id !== ownMarking.periodId));
+          this.createOneDayMarking(isoDate, color, user);
+        },
+        error: () => {
+          this.isSaving.set(false);
+        },
+      });
+      return;
+    }
+
+    this.createOneDayMarking(isoDate, color, user);
+  }
+
+  private createOneDayMarking(isoDate: string, color: SelectionColor, user: string): void {
     this.isSaving.set(true);
     this.errorMessage.set(null);
     this.periodService
@@ -437,9 +457,11 @@ export class Calendar implements OnInit, OnDestroy {
           this.isSaving.set(false);
         },
         error: (err: HttpErrorResponse) => {
+          this.isSaving.set(false);
           if (err.status === 409) {
-            // Server rejected: user already has a marking in this range
-            this.errorMessage.set('Zaznaczyłeś już jeden lub więcej dni w tym zakresie.');
+            // The local list is stale (e.g. the same user marked this day in
+            // another tab between the 15s polls) — resync instead of complaining.
+            this.resyncPeriods();
           } else {
             // Network/server unavailable — store locally as fallback
             this.periods.update((list) => [
@@ -454,9 +476,15 @@ export class Calendar implements OnInit, OnDestroy {
               },
             ]);
           }
-          this.isSaving.set(false);
         },
       });
+  }
+
+  private resyncPeriods(): void {
+    this.periodService.getPeriods(this.eventId).subscribe({
+      next: (list) => this.periods.set(list),
+      error: () => this.errorMessage.set(RESYNC_ERROR_MSG),
+    });
   }
 
   clearError(): void {
@@ -488,8 +516,10 @@ export class Calendar implements OnInit, OnDestroy {
   }
 
   private commitPreviewDays(): void {
+    const allDays = this.weeks().flat();
     for (const iso of this.previewDays()) {
-      this.confirmSelection(new Date(iso));
+      const day = allDays.find((d) => d.date.toISOString() === iso);
+      if (day) this.paintDay(day, false);
     }
   }
 
