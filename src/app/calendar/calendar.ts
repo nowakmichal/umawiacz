@@ -417,17 +417,48 @@ export class Calendar implements OnInit, OnDestroy {
     }
 
     if (ownMarking && day.ownColor !== color) {
-      // Different own color: chain delete → create so the server's per-user
-      // overlap check never sees the old period still on the server.
+      // Different own color: optimistically swap the own period for a one-day
+      // temp of the new color, then chain delete → create so the server's
+      // per-user overlap check never sees the old period still on the server.
       this.isSaving.set(true);
       this.errorMessage.set(null);
+      const tempId = crypto.randomUUID();
+      this.periods.update((list) => [
+        ...list.filter((p) => p.id !== ownMarking.periodId),
+        { id: tempId, eventId: this.eventId, start: isoDate, end: isoDate, color, userName: user },
+      ]);
       this.periodService.deletePeriod(ownMarking.periodId).subscribe({
         next: () => {
-          this.periods.update((list) => list.filter((p) => p.id !== ownMarking.periodId));
-          this.createOneDayMarking(isoDate, color, user);
+          this.periodService
+            .createPeriod(this.eventId, { start: isoDate, end: isoDate, color, userName: user })
+            .subscribe({
+              next: (resp) => {
+                this.periods.update((list) => {
+                  const serverPeriod: Period = {
+                    id: resp.id,
+                    eventId: this.eventId,
+                    start: resp.start,
+                    end: resp.end,
+                    color: resp.color,
+                    userName: resp.userName,
+                  };
+                  const index = list.findIndex((p) => p.id === tempId);
+                  if (index === -1) return [...list, serverPeriod];
+                  const updated = [...list];
+                  updated[index] = serverPeriod;
+                  return updated;
+                });
+                this.isSaving.set(false);
+              },
+              error: () => {
+                this.isSaving.set(false);
+                this.resyncPeriods();
+              },
+            });
         },
         error: () => {
           this.isSaving.set(false);
+          this.resyncPeriods();
         },
       });
       return;
@@ -439,21 +470,30 @@ export class Calendar implements OnInit, OnDestroy {
   private createOneDayMarking(isoDate: string, color: SelectionColor, user: string): void {
     this.isSaving.set(true);
     this.errorMessage.set(null);
+    const tempId = crypto.randomUUID();
+    this.periods.update((list) => [
+      ...list,
+      { id: tempId, eventId: this.eventId, start: isoDate, end: isoDate, color, userName: user },
+    ]);
     this.periodService
       .createPeriod(this.eventId, { start: isoDate, end: isoDate, color, userName: user })
       .subscribe({
         next: (resp) => {
-          this.periods.update((list) => [
-            ...list,
-            {
+          this.periods.update((list) => {
+            const serverPeriod: Period = {
               id: resp.id,
               eventId: this.eventId,
               start: resp.start,
               end: resp.end,
               color: resp.color,
               userName: resp.userName,
-            },
-          ]);
+            };
+            const index = list.findIndex((p) => p.id === tempId);
+            if (index === -1) return [...list, serverPeriod];
+            const updated = [...list];
+            updated[index] = serverPeriod;
+            return updated;
+          });
           this.isSaving.set(false);
         },
         error: (err: HttpErrorResponse) => {
@@ -461,20 +501,8 @@ export class Calendar implements OnInit, OnDestroy {
           if (err.status === 409) {
             // The local list is stale (e.g. the same user marked this day in
             // another tab between the 15s polls) — resync instead of complaining.
+            this.periods.update((list) => list.filter((p) => p.id !== tempId));
             this.resyncPeriods();
-          } else {
-            // Network/server unavailable — store locally as fallback
-            this.periods.update((list) => [
-              ...list,
-              {
-                id: crypto.randomUUID(),
-                eventId: this.eventId,
-                start: isoDate,
-                end: isoDate,
-                color,
-                userName: user,
-              },
-            ]);
           }
         },
       });

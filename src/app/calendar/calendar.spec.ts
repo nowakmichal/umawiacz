@@ -6,7 +6,12 @@ import { Calendar } from './calendar';
 import { PeriodService } from '../services/period.service';
 import { EventService } from '../services/event.service';
 import { AuthService } from '../services/auth.service';
-import { SELECTION_COLORS, Period, CreateTimePeriodRequest } from '../models/period.model';
+import {
+  SELECTION_COLORS,
+  Period,
+  CreateTimePeriodRequest,
+  CreateTimePeriodResponse,
+} from '../models/period.model';
 import { Event } from '../models/event.model';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -255,6 +260,44 @@ describe('Calendar', () => {
       expect(component.isSaving()).toBe(false);
     });
 
+    it('adds the period immediately (temp entry) and swaps it for the server response', () => {
+      component.currentUser.set('Ala');
+      const create$ = new Subject<CreateTimePeriodResponse>();
+      periodService.createPeriod.mockReturnValue(create$);
+
+      const day = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
+      component.onDayClick(day);
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-20',
+        end: '2026-06-20',
+        color: 'green',
+        userName: 'Ala',
+      });
+
+      const temp = component.periods().find((p) => p.start === '2026-06-20');
+      expect(temp).toBeTruthy();
+      expect(temp?.end).toBe('2026-06-20');
+      expect(temp?.color).toBe('green');
+      expect(temp?.userName).toBe('Ala');
+      expect(temp?.id).not.toBe('server-id');
+      expect(component.isSaving()).toBe(true);
+
+      create$.next({
+        id: 'server-id',
+        start: '2026-06-20',
+        end: '2026-06-20',
+        color: 'green',
+        userName: 'Ala',
+      });
+      create$.complete();
+
+      expect(component.periods().length).toBe(3);
+      expect(component.periods().some((p) => p.id === temp?.id)).toBe(false);
+      expect(component.periods().filter((p) => p.id === 'server-id').length).toBe(1);
+      expect(component.isSaving()).toBe(false);
+    });
+
     it('resyncs silently on 409 conflict', () => {
       component.currentUser.set('Ala');
       const err = new HttpErrorResponse({ status: 409 });
@@ -269,17 +312,25 @@ describe('Calendar', () => {
       expect(component.periods()).toEqual([]);
     });
 
-    it('should add period locally on network error (fallback)', () => {
+    it('keeps the optimistic period on network error', () => {
       component.currentUser.set('Ala');
-      periodService.createPeriod.mockReturnValue(throwError(() => new Error('Network error')));
+      const create$ = new Subject<CreateTimePeriodResponse>();
+      periodService.createPeriod.mockReturnValue(create$);
 
       const day = { ...component.weeks()[3][0], date: new Date(2026, 5, 20) };
       component.onDayClick(day);
 
+      const temp = component.periods().find((p) => p.start === '2026-06-20');
+      expect(temp).toBeTruthy();
+      expect(component.isSaving()).toBe(true);
+
+      create$.error(new Error('Network error'));
+
+      const kept = component.periods().find((p) => p.start === '2026-06-20');
+      expect(kept?.id).toBe(temp?.id);
       expect(component.periods().length).toBe(3);
-      expect(component.periods()[2].eventId).toBe(EVENT_ID);
-      expect(component.periods()[2].start).toBe('2026-06-20');
-      expect(component.periods()[2].end).toBe('2026-06-20');
+      expect(component.isSaving()).toBe(false);
+      expect(component.errorMessage()).toBeNull();
     });
   });
 
@@ -660,6 +711,47 @@ describe('Calendar', () => {
       expect(component.periods().map((p) => p.id)).toEqual(['p2', 'rc2']);
     });
 
+    it('swaps the own period for a one-day temp of the new color before any HTTP response is flushed', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.selectColor('red');
+      const delete$ = new Subject<void>();
+      const create$ = new Subject<CreateTimePeriodResponse>();
+      periodService.deletePeriod.mockReturnValue(delete$);
+      periodService.createPeriod.mockReturnValue(create$);
+
+      const day = dayOfMonth(1);
+      if (!day) return;
+
+      component.onDayClick(day);
+
+      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
+      expect(periodService.createPeriod).not.toHaveBeenCalled();
+
+      const pending = component.periods();
+      expect(pending.some((p) => p.id === 'p1')).toBe(false);
+      const temp = pending.find((p) => p.start === '2026-06-01' && p.end === '2026-06-01');
+      expect(temp).toBeTruthy();
+      expect(temp?.id).not.toBe('p1');
+      expect(temp?.color).toBe('red');
+      expect(temp?.userName).toBe('Ala');
+      expect(component.isSaving()).toBe(true);
+
+      delete$.next();
+      delete$.complete();
+      create$.next({
+        id: 'rc1',
+        start: '2026-06-01',
+        end: '2026-06-01',
+        color: 'red',
+        userName: 'Ala',
+      });
+      create$.complete();
+
+      expect(component.periods().map((p) => p.id)).toEqual(['p2', 'rc1']);
+      expect(component.isSaving()).toBe(false);
+    });
+
     it('marks a day marked only by other users for the current user', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
@@ -795,12 +887,15 @@ describe('Calendar', () => {
       expect(periodService.createPeriod).toHaveBeenCalledTimes(3);
     });
 
-    it('issues no request for days already marked in the selected color and marks the rest of the swipe path', () => {
+    it('repaints days the current user already marked', () => {
       component.viewDate.set(new Date(2026, 5, 1));
       component.currentUser.set('Ala');
+      component.selectColor('red');
+      periodService.deletePeriod.mockReturnValue(of(null));
       mockCreate();
 
-      // Ala owns 2026-06-01..05 (period p1): days 3-5 are pre-marked, day 6 is free
+      // Ala owns 2026-06-01..05 (period p1, green): the swipe repaints days 3-5
+      // red and marks the free day 6
       const a = dayOfMonth(3);
       const b = dayOfMonth(4);
       const c = dayOfMonth(5);
@@ -819,17 +914,19 @@ describe('Calendar', () => {
       cellA.dispatchEvent(touchEvent('touchmove', cellA, 135, 100));
       cellA.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
 
-      expect(periodService.createPeriod).toHaveBeenCalledTimes(1);
-      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
-        start: '2026-06-06',
-        end: '2026-06-06',
-        color: 'green',
-        userName: 'Ala',
-      });
-      expect(periodService.deletePeriod).not.toHaveBeenCalled();
+      expect(periodService.deletePeriod).toHaveBeenCalledTimes(1);
+      expect(periodService.deletePeriod).toHaveBeenCalledWith('p1');
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(4);
+      expect(periodService.createPeriod.mock.calls.map((call) => call[1])).toEqual([
+        { start: '2026-06-03', end: '2026-06-03', color: 'red', userName: 'Ala' },
+        { start: '2026-06-04', end: '2026-06-04', color: 'red', userName: 'Ala' },
+        { start: '2026-06-05', end: '2026-06-05', color: 'red', userName: 'Ala' },
+        { start: '2026-06-06', end: '2026-06-06', color: 'red', userName: 'Ala' },
+      ]);
+      expect(component.previewDays()).toEqual([]);
 
       cellD.click();
-      expect(periodService.createPeriod).toHaveBeenCalledTimes(1);
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(4);
     });
 
     it('repaints the own-marked day a touch swipe starts on with the selected color', () => {
@@ -966,6 +1063,67 @@ describe('Calendar', () => {
         { start: '2026-06-03', end: '2026-06-03', color: 'red', userName: 'Ala' },
         { start: '2026-06-06', end: '2026-06-06', color: 'red', userName: 'Ala' },
       ]);
+    });
+
+    it('swaps the selecting highlight for tint-free in the same cycle the touch swipe releases', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockReturnValue(new Subject<CreateTimePeriodResponse>());
+
+      const a = dayOfMonth(6);
+      const b = dayOfMonth(7);
+      const c = dayOfMonth(8);
+      if (!a || !b || !c) return;
+      const cellA = cellFor(a);
+      const cellB = cellFor(b);
+      const cellC = cellFor(c);
+
+      stubElementFromPoint((x) => (x < 105 ? cellA : x < 120 ? cellB : cellC));
+
+      cellA.dispatchEvent(touchEvent('touchstart', cellA, 100, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 115, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 125, 100));
+      cellA.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
+
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(3);
+      fixture.detectChanges();
+      expect(component.previewDays()).toEqual([]);
+      for (const cell of [cellA, cellB, cellC]) {
+        expect(cell.classList.contains('selecting')).toBe(false);
+        expect(cell.classList.contains('tint-free')).toBe(true);
+        expect(cell.classList.contains('tint-busy')).toBe(false);
+      }
+    });
+
+    it('swaps the selecting highlight for tint-busy in the same cycle the mouse drag releases', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      component.selectColor('red');
+      periodService.createPeriod.mockReturnValue(new Subject<CreateTimePeriodResponse>());
+
+      const a = dayOfMonth(6);
+      const b = dayOfMonth(7);
+      const c = dayOfMonth(8);
+      if (!a || !b || !c) return;
+      const cellA = cellFor(a);
+      const cellB = cellFor(b);
+      const cellC = cellFor(c);
+
+      stubElementFromPoint((x) => (x < 105 ? cellA : x < 120 ? cellB : cellC));
+
+      cellA.dispatchEvent(mouseEvent('mousedown', cellA, 100, 100));
+      cellB.dispatchEvent(mouseEvent('mousemove', cellB, 115, 100));
+      cellC.dispatchEvent(mouseEvent('mousemove', cellC, 125, 100));
+      cellC.dispatchEvent(mouseEvent('mouseup', cellC, 125, 100));
+
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(3);
+      fixture.detectChanges();
+      expect(component.previewDays()).toEqual([]);
+      for (const cell of [cellA, cellB, cellC]) {
+        expect(cell.classList.contains('selecting')).toBe(false);
+        expect(cell.classList.contains('tint-busy')).toBe(true);
+        expect(cell.classList.contains('tint-free')).toBe(false);
+      }
     });
   });
 
