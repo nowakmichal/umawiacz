@@ -422,7 +422,7 @@ export class Calendar implements OnInit, OnDestroy {
       // per-user overlap check never sees the old period still on the server.
       this.isSaving.set(true);
       this.errorMessage.set(null);
-      const tempId = crypto.randomUUID();
+      const tempId = newTempId();
       this.periods.update((list) => [
         ...list.filter((p) => p.id !== ownMarking.periodId),
         { id: tempId, eventId: this.eventId, start: isoDate, end: isoDate, color, userName: user },
@@ -470,7 +470,7 @@ export class Calendar implements OnInit, OnDestroy {
   private createOneDayMarking(isoDate: string, color: SelectionColor, user: string): void {
     this.isSaving.set(true);
     this.errorMessage.set(null);
-    const tempId = crypto.randomUUID();
+    const tempId = newTempId();
     this.periods.update((list) => [
       ...list,
       { id: tempId, eventId: this.eventId, start: isoDate, end: isoDate, color, userName: user },
@@ -589,6 +589,15 @@ export class Calendar implements OnInit, OnDestroy {
       a.getDate() === b.getDate()
     );
   }
+}
+
+// crypto.randomUUID is missing in non-secure contexts (e.g. http://LAN-IP), so
+// fall back to a plain string — the id only needs to be unique within the list.
+function newTempId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 function toIsoDate(d: Date): string {

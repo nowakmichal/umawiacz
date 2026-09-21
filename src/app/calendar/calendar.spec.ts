@@ -1127,6 +1127,140 @@ describe('Calendar', () => {
     });
   });
 
+  describe('non-secure context (no crypto.randomUUID)', () => {
+    function dayCells(): HTMLElement[] {
+      fixture.detectChanges();
+      return Array.from(fixture.nativeElement.querySelectorAll('.day-cell'));
+    }
+
+    function dayOfMonth(n: number) {
+      return component.weeks().flat().find((d) => d.inCurrentMonth && d.date.getDate() === n);
+    }
+
+    type CalDay = NonNullable<ReturnType<typeof dayOfMonth>>;
+
+    function cellFor(day: CalDay): HTMLElement {
+      return dayCells()[component.weeks().flat().indexOf(day)];
+    }
+
+    // jsdom has no Touch/TouchList and no document.elementFromPoint, so build the
+    // touch events by hand and stub elementFromPoint with the rendered cells.
+    function touchEvent(type: string, cell: HTMLElement, x: number, y: number): TouchEvent {
+      const ev = new TouchEvent(type, { bubbles: true, cancelable: true });
+      const touch = { identifier: 0, target: cell, clientX: x, clientY: y };
+      Object.defineProperty(ev, 'touches', { configurable: true, get: () => [touch] });
+      return ev;
+    }
+
+    let restoreElementFromPoint: (() => void) | null = null;
+
+    function stubElementFromPoint(impl: (x: number, y: number) => Element | null): void {
+      const original = document.elementFromPoint;
+      document.elementFromPoint = impl;
+      restoreElementFromPoint = () => {
+        document.elementFromPoint = original;
+      };
+    }
+
+    beforeEach(() => {
+      // Non-secure contexts (http://LAN-IP) have no crypto.randomUUID — keep crypto
+      // defined so the component takes the fallback-id branch, not the undefined branch.
+      vi.stubGlobal('crypto', {});
+    });
+
+    afterEach(() => {
+      restoreElementFromPoint?.();
+      restoreElementFromPoint = null;
+      vi.unstubAllGlobals();
+    });
+
+    it('taps an unmarked day into a fallback temp entry and swaps it for the server id', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      const create$ = new Subject<CreateTimePeriodResponse>();
+      periodService.createPeriod.mockReturnValue(create$);
+
+      const day = dayOfMonth(6);
+      if (!day) return;
+
+      expect(() => component.onDayClick(day)).not.toThrow();
+
+      expect(periodService.createPeriod).toHaveBeenCalledWith(EVENT_ID, {
+        start: '2026-06-06',
+        end: '2026-06-06',
+        color: 'green',
+        userName: 'Ala',
+      });
+
+      const temp = component.periods().find((p) => p.start === '2026-06-06');
+      expect(temp).toBeTruthy();
+      expect(temp?.end).toBe('2026-06-06');
+      expect(temp?.color).toBe('green');
+      expect(temp?.userName).toBe('Ala');
+      expect(temp?.id).toMatch(/^[0-9a-z]+-[0-9a-z]+$/);
+      expect(component.isSaving()).toBe(true);
+
+      create$.next({
+        id: 'server-id',
+        start: '2026-06-06',
+        end: '2026-06-06',
+        color: 'green',
+        userName: 'Ala',
+      });
+      create$.complete();
+
+      expect(component.periods().some((p) => p.id === temp?.id)).toBe(false);
+      expect(component.periods().filter((p) => p.id === 'server-id').length).toBe(1);
+      expect(component.isSaving()).toBe(false);
+    });
+
+    it('commits the whole touch swipe range when crypto.randomUUID is missing', () => {
+      component.viewDate.set(new Date(2026, 5, 1));
+      component.currentUser.set('Ala');
+      periodService.createPeriod.mockImplementation(
+        (eventId: string, req: CreateTimePeriodRequest) =>
+          of({
+            id: `sw-${req.start}`,
+            start: req.start,
+            end: req.end,
+            color: req.color,
+            userName: req.userName,
+          }),
+      );
+
+      const a = dayOfMonth(6);
+      const b = dayOfMonth(7);
+      const c = dayOfMonth(8);
+      if (!a || !b || !c) return;
+      const cellA = cellFor(a);
+      const cellB = cellFor(b);
+      const cellC = cellFor(c);
+
+      stubElementFromPoint((x) => (x < 105 ? cellA : x < 120 ? cellB : cellC));
+
+      cellA.dispatchEvent(touchEvent('touchstart', cellA, 100, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 115, 100));
+      cellA.dispatchEvent(touchEvent('touchmove', cellA, 125, 100));
+      cellA.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
+
+      expect(periodService.createPeriod).toHaveBeenCalledTimes(3);
+      expect(periodService.createPeriod.mock.calls.map((call) => call[1].start)).toEqual([
+        '2026-06-06',
+        '2026-06-07',
+        '2026-06-08',
+      ]);
+      expect(periodService.deletePeriod).not.toHaveBeenCalled();
+      expect(component.previewDays()).toEqual([]);
+      expect(component.periods().map((p) => p.id)).toEqual([
+        'p1',
+        'p2',
+        'sw-2026-06-06',
+        'sw-2026-06-07',
+        'sw-2026-06-08',
+      ]);
+    });
+  });
+
   describe('error banner', () => {
     it('should show and dismiss error', () => {
       component.errorMessage.set('Something went wrong');
