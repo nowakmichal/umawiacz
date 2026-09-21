@@ -300,12 +300,12 @@ export class Calendar implements OnInit, OnDestroy {
   onGridTouchStart(event: TouchEvent): void {
     const t = event.touches?.[0];
     if (!t) return;
-    const anchor = this.cellAtPoint(t.clientX, t.clientY);
-    this.swipeAnchor = anchor?.dataset['date'] ?? null;
+    const anchorDate = this.cellAtPoint(t.clientX, t.clientY)?.dataset['date'] ?? null;
+    this.swipeAnchor = anchorDate;
     this.swipeStartX = t.clientX;
     this.swipeStartY = t.clientY;
     this.swipeMoved = false;
-    this.previewDays.set([]);
+    this.previewDays.set(anchorDate ? [anchorDate] : []);
   }
 
   onGridTouchMove(event: TouchEvent): void {
@@ -354,12 +354,12 @@ export class Calendar implements OnInit, OnDestroy {
   }
 
   onGridMouseDown(event: MouseEvent): void {
-    const anchor = this.cellAtPoint(event.clientX, event.clientY);
-    this.pressAnchor = anchor?.dataset['date'] ?? null;
+    const anchorDate = this.cellAtPoint(event.clientX, event.clientY)?.dataset['date'] ?? null;
+    this.pressAnchor = anchorDate;
     this.pressStartX = event.clientX;
     this.pressStartY = event.clientY;
     this.pressMoved = false;
-    this.previewDays.set([]);
+    this.previewDays.set(anchorDate ? [anchorDate] : []);
     event.preventDefault();
   }
 
@@ -509,16 +509,19 @@ export class Calendar implements OnInit, OnDestroy {
     const day = this.weeks()
       .flat()
       .find((d) => d.date.toISOString() === iso);
-    if (!day || day.ownColor !== null) return;
+    if (!day) return;
     if (!this.previewDays().includes(iso)) {
       this.previewDays.update((list) => [...list, iso]);
     }
   }
 
   private commitPreviewDays(): void {
-    const allDays = this.weeks().flat();
+    // Fresh lookup per day: a repaint's delete→create mutates periods mid-loop,
+    // so later days must see the updated markings.
     for (const iso of this.previewDays()) {
-      const day = allDays.find((d) => d.date.toISOString() === iso);
+      const day = this.weeks()
+        .flat()
+        .find((d) => d.date.toISOString() === iso);
       if (day) this.paintDay(day, false);
     }
   }
